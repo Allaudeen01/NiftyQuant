@@ -1,0 +1,21 @@
+# Core analytics
+numpy>=1.26
+pandas>=2.1
+
+# Testing
+pytest>=8.0
+
+# --- Broker integration (Phase 2) ---
+# The provider imports growwapi lazily, so it is only required to actually
+# hit the live API / authenticate. Unit tests run without it.
+growwapi>=0.1
+pyotp>=2.9          # TOTP auth flow
+
+# --- Optional / later phases (kept commented until needed) ---
+# scipy>=1.11            # alternative stats / optimisation
+# fastapi>=0.110         # Phase: API layer
+# uvicorn>=0.29
+# SQLAlchemy>=2.0        # Phase: persistence
+# psycopg2-binary>=2.9   # PostgreSQL/TimescaleDB driver
+# redis>=5.0
+# requests>=2.31         # data providers (NSE / broker REST)
