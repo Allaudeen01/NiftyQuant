@@ -23,6 +23,11 @@ from datetime import date, datetime
 
 from nifty_quant.data.providers.angel_instruments import InstrumentMaster
 from nifty_quant.data.providers.angelone import AngelOneProvider
+from nifty_quant.data.session import (
+    load_event_calendar,
+    monthly_expiry_set,
+    session_metadata,
+)
 from nifty_quant.data.storage.parquet import ParquetStorage
 from nifty_quant.dotenv import load_dotenv
 from nifty_quant.log import get_logger
@@ -71,25 +76,33 @@ def main() -> None:
         print("Available expiries:", ", ".join(d.isoformat() for d in avail[:20]))
         return
 
+    # Static context shared across the session's snapshots.
+    monthly = monthly_expiry_set(master.available_expiries(args.underlying))
+    events = load_event_calendar(f"{args.data_dir}/event_calendar.json")
+
     for i in range(args.count):
         try:
             chain = provider.get_option_chain(args.underlying, expiry)
+            from dataclasses import replace
+            ctx = dict(chain.context)
+            ctx.update(session_metadata(chain.timestamp, expiry,
+                                        monthly_expiries=monthly, events=events))
             if not args.no_vix:
                 vix = provider.get_india_vix()
                 if vix is not None:
-                    # Attach synchronized context (immutable chain -> rebuild).
-                    from dataclasses import replace
-                    chain = replace(chain, context={**chain.context,
-                                                    "india_vix": vix})
+                    ctx["india_vix"] = vix
+            chain = replace(chain, context=ctx)
             rows = storage.write_option_chain(chain)
-            vix_str = (f", VIX={chain.context['india_vix']:.2f}"
-                       if "india_vix" in chain.context else "")
+            vix_str = (f", VIX={ctx['india_vix']:.2f}"
+                       if "india_vix" in ctx else "")
             print(f"[{datetime.now():%H:%M:%S}] snapshot {i + 1}/{args.count}: "
                   f"{rows} quotes, spot={chain.spot:.2f}, "
-                  f"ATM={chain.atm_strike():.0f}{vix_str}")
+                  f"ATM={chain.atm_strike():.0f}, DTE={ctx['days_to_expiry']}"
+                  f"{vix_str}")
             _log.event("option_chain_snapshot", underlying=args.underlying,
                        expiry=expiry.isoformat(), rows=rows, spot=chain.spot,
-                       india_vix=chain.context.get("india_vix"))
+                       india_vix=ctx.get("india_vix"),
+                       days_to_expiry=ctx.get("days_to_expiry"))
         except Exception as exc:  # keep collecting on transient errors
             _log.event("option_chain_snapshot_error", level=40, error=str(exc))
             print(f"snapshot {i + 1} failed: {exc}")
