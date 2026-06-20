@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nifty_quant"
+version = "0.1.0"
+description = "Quantitative research platform for Nifty options (research/backtesting)."
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pyarrow>=14",
+]
+
+[project.optional-dependencies]
+# Broker SDKs are only needed to hit live APIs; imported lazily.
+brokers = [
+    "growwapi>=0.1",
+    "smartapi-python>=1.3",
+    "pyotp>=2.9",
+    "pytz>=2024.1",
+    "logzero>=1.7",
+    "websocket-client>=1.7",
+]
+plots = ["matplotlib>=3.8"]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+include = ["nifty_quant*"]
+exclude = ["tests*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

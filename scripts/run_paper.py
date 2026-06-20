@@ -29,6 +29,7 @@ from nifty_quant.backtest.risk import BasicRiskEngine
 from nifty_quant.backtest.strategies.feature_momentum import FeatureMomentumStrategy
 from nifty_quant.data.providers.groww import GrowwProvider
 from nifty_quant.data.storage.parquet import ParquetStorage
+from nifty_quant.dotenv import load_dotenv
 from nifty_quant.features.engine import FeatureConfig, FeatureEngine
 from nifty_quant.features.store import ParquetFeatureStore
 from nifty_quant.feed.clock import RealClock
@@ -54,6 +55,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    load_dotenv()
     expiry = date.fromisoformat(args.expiry)
 
     provider = GrowwProvider.from_env()  # live_trading_enabled stays False

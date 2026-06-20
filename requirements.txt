@@ -11,6 +11,13 @@ pytest>=8.0
 growwapi>=0.1
 pyotp>=2.9          # TOTP auth flow
 
+# Angel One SmartAPI (historical data + trading). Imported lazily; only
+# needed to hit the live API. Unit tests run without it.
+smartapi-python>=1.3
+pytz>=2024.1
+logzero>=1.7            # undeclared smartapi-python dependency
+websocket-client>=1.7   # undeclared smartapi-python dependency
+
 # --- Optional / later phases (kept commented until needed) ---
 # scipy>=1.11            # alternative stats / optimisation
 # fastapi>=0.110         # Phase: API layer
