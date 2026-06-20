@@ -30,7 +30,7 @@ from typing import Any
 
 import pandas as pd
 
-from nifty_quant.data.models import Candle, OHLCVSeries, OptionChain
+from nifty_quant.data.models import Candle, OHLCVSeries, OptionChain, OptionQuote
 from nifty_quant.data.providers.base import (
     BrokerProvider,
     OrderKind,
@@ -90,17 +90,21 @@ class AngelOneProvider(BrokerProvider):
         symbol_tokens: dict[str, str] | None = None,
         live_trading_enabled: bool = False,
         request_pause: float = 0.34,
+        instrument_master: Any = None,
     ) -> None:
         """Wrap an already-authenticated SmartConnect client.
 
         ``request_pause`` throttles chunked historical requests to respect
-        SmartAPI rate limits (set 0 in tests).
+        SmartAPI rate limits (set 0 in tests). ``instrument_master`` is an
+        :class:`InstrumentMaster` used to resolve option tokens; created lazily
+        if not supplied.
         """
         self._client = client
         self.exchange = exchange
         self.symbol_tokens = {**_DEFAULT_TOKENS, **(symbol_tokens or {})}
         self.live_trading_enabled = live_trading_enabled
         self.request_pause = request_pause
+        self._instrument_master = instrument_master
 
     # --- constructors / auth ------------------------------------------------
 
@@ -202,16 +206,70 @@ class AngelOneProvider(BrokerProvider):
         return series.candles[-1].close
 
     def get_option_chain(self, underlying: str, expiry: date) -> OptionChain:
-        """Not yet implemented for Angel.
+        """Build an option-chain snapshot from the instrument master + market data.
 
-        SmartAPI has no single option-chain-with-Greeks endpoint like Groww;
-        a chain is assembled from per-contract tokens (and the newer Option
-        Greek API). Deferred until option features are needed here.
+        Angel has no single chain endpoint, so we resolve the CE/PE contract
+        tokens for (underlying, expiry) from the scrip master, then fetch live
+        LTP / open interest / depth via ``getMarketData`` in batches of 50.
+        Implied volatility is left unset; the analytics layer derives it from
+        the mid price when needed.
         """
-        raise NotImplementedError(
-            "AngelOneProvider.get_option_chain is not implemented yet; "
-            "historical candles are the current focus."
+        master = self._get_instrument_master()
+        instruments = master.option_instruments(underlying, expiry)
+        if not instruments:
+            raise RuntimeError(
+                f"no {underlying} OPTIDX contracts for expiry {expiry.isoformat()} "
+                "in the scrip master (check the expiry date / refresh the master)."
+            )
+
+        by_token = {ins.token: ins for ins in instruments}
+        fetched = self._fetch_market_data([ins.token for ins in instruments])
+
+        quotes: list[OptionQuote] = []
+        for item in fetched:
+            token = str(item.get("symbolToken") or item.get("token") or "")
+            ins = by_token.get(token)
+            if ins is None:
+                continue
+            bid, ask = _best_bid_ask(item)
+            quotes.append(OptionQuote(
+                strike=ins.strike,
+                option_type=ins.option_type,
+                expiry=expiry,
+                last_price=float(item.get("ltp", 0.0) or 0.0),
+                bid=bid,
+                ask=ask,
+                volume=float(item.get("tradeVolume", 0.0) or 0.0),
+                open_interest=float(item.get("opnInterest", 0.0) or 0.0),
+                implied_volatility=None,
+            ))
+
+        spot = self.get_spot(underlying)
+        return OptionChain(
+            underlying=underlying,
+            spot=spot,
+            expiry=expiry,
+            timestamp=datetime.now(),
+            quotes=tuple(quotes),
         )
+
+    def _get_instrument_master(self):
+        if self._instrument_master is None:
+            from nifty_quant.data.providers.angel_instruments import InstrumentMaster
+            self._instrument_master = InstrumentMaster()
+        return self._instrument_master
+
+    def _fetch_market_data(self, tokens: list[str]) -> list[dict]:
+        """Call getMarketData FULL in batches of <= 50 NFO tokens."""
+        fetched: list[dict] = []
+        for i in range(0, len(tokens), 50):
+            batch = tokens[i:i + 50]
+            resp = self._client.getMarketData("FULL", {"NFO": batch})
+            data = (resp or {}).get("data", {}) if isinstance(resp, dict) else {}
+            fetched.extend(data.get("fetched", []) or [])
+            if self.request_pause > 0:
+                time.sleep(self.request_pause)
+        return fetched
 
     # --- execution (gated) --------------------------------------------------
 
@@ -292,6 +350,16 @@ def _generate_totp(secret: str) -> str:
             "secret STRING from the Angel 'Enable TOTP' QR setup (only letters "
             "A-Z and digits 2-7), not the 6-digit code and not the otpauth URL."
         ) from exc
+
+
+def _best_bid_ask(item: dict) -> tuple[float, float]:
+    """Extract best bid/ask from a getMarketData FULL depth payload."""
+    depth = item.get("depth") or {}
+    buys = depth.get("buy") or []
+    sells = depth.get("sell") or []
+    bid = float(buys[0]["price"]) if buys else 0.0
+    ask = float(sells[0]["price"]) if sells else 0.0
+    return bid, ask
 
 
 def _import_smartconnect():  # pragma: no cover - thin import shim

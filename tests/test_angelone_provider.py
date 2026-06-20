@@ -134,11 +134,6 @@ def test_orders_work_when_enabled():
     assert client.placed[0]["transactiontype"] == "BUY"
 
 
-def test_option_chain_not_implemented(provider):
-    with pytest.raises(NotImplementedError):
-        provider.get_option_chain("NIFTY", date(2025, 1, 30))
-
-
 def test_orderbook_passthrough(provider):
     book = provider.get_orderbook()
     assert isinstance(book, list)
