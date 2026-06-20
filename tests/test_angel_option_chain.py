@@ -70,7 +70,11 @@ def test_available_expiries():
 
 class FakeClientForChain:
     def getMarketData(self, mode, exchange_tokens):
-        assert mode == "FULL"
+        assert mode in ("FULL", "LTP")
+        if mode == "LTP":
+            tok = exchange_tokens["NSE"][0]
+            return {"status": True, "data": {
+                "fetched": [{"symbolToken": tok, "ltp": 13.42}], "unfetched": []}}
         tokens = exchange_tokens["NFO"]
         fetched = []
         for t in tokens:
@@ -118,3 +122,28 @@ def test_get_option_chain_raises_when_no_contracts():
     )
     with pytest.raises(RuntimeError):
         provider.get_option_chain("NIFTY", date(2030, 1, 1))
+
+
+def test_index_token_resolves_india_vix():
+    records = _records() + [
+        {"token": "26017", "symbol": "India VIX", "name": "INDIA VIX",
+         "expiry": "", "strike": "0.000000", "instrumenttype": "AMXIDX",
+         "exch_seg": "NSE"},
+    ]
+    master = InstrumentMaster.from_records(records)
+    assert master.index_token("INDIA VIX") == "26017"
+    assert master.index_token("NIFTY") == "99926000"
+    assert master.index_token("NONEXISTENT") is None
+
+
+def test_get_india_vix():
+    records = _records() + [
+        {"token": "26017", "symbol": "India VIX", "name": "INDIA VIX",
+         "expiry": "", "strike": "0.000000", "instrumenttype": "AMXIDX",
+         "exch_seg": "NSE"},
+    ]
+    master = InstrumentMaster.from_records(records)
+    provider = AngelOneProvider(
+        FakeClientForChain(), request_pause=0.0, instrument_master=master
+    )
+    assert provider.get_india_vix() == pytest.approx(13.42)

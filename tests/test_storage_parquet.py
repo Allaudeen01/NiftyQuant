@@ -149,3 +149,18 @@ def test_option_chain_idempotent(tmp_path):
     )
     assert len(chains) == 1
     assert len(chains[0].quotes) == 4  # not 8
+
+
+def test_option_chain_context_roundtrip(tmp_path):
+    store = ParquetStorage(tmp_path)
+    ts = datetime(2025, 1, 2, 10, 0)
+    chain = _chain(ts)
+    chain = OptionChain(chain.underlying, chain.spot, chain.expiry,
+                        chain.timestamp, chain.quotes,
+                        context={"india_vix": 13.25, "usdinr": 83.1})
+    store.write_option_chain(chain)
+    out = store.read_option_chains(
+        "NIFTY", datetime(2025, 1, 2), datetime(2025, 1, 2, 23, 59)
+    )[0]
+    assert out.context["india_vix"] == pytest.approx(13.25)
+    assert out.context["usdinr"] == pytest.approx(83.1)

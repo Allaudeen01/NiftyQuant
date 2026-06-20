@@ -115,6 +115,10 @@ class OptionChain:
     expiry: date
     timestamp: datetime
     quotes: Sequence[OptionQuote] = field(default_factory=tuple)
+    context: dict = field(default_factory=dict)
+    """Synchronized market context captured at the same instant, e.g.
+    ``{"india_vix": 13.2, "usdinr": 83.1}``. Kept generic so new context
+    fields can be added without changing the schema."""
 
     def calls(self) -> list[OptionQuote]:
         return sorted(

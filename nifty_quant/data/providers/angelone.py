@@ -253,6 +253,19 @@ class AngelOneProvider(BrokerProvider):
             quotes=tuple(quotes),
         )
 
+    def get_india_vix(self) -> float | None:
+        """Latest India VIX value via getMarketData LTP (None if unavailable)."""
+        master = self._get_instrument_master()
+        token = master.index_token("INDIA VIX", exch_seg="NSE")
+        if token is None:
+            return None
+        resp = self._client.getMarketData("LTP", {"NSE": [token]})
+        data = (resp or {}).get("data", {}) if isinstance(resp, dict) else {}
+        fetched = data.get("fetched", []) or []
+        if not fetched:
+            return None
+        return float(fetched[0].get("ltp", 0.0) or 0.0)
+
     def _get_instrument_master(self):
         if self._instrument_master is None:
             from nifty_quant.data.providers.angel_instruments import InstrumentMaster

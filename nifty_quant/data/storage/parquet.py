@@ -16,6 +16,7 @@ de-duplicated rather than appended blindly.
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from pathlib import Path
 
@@ -48,6 +49,7 @@ _CHAIN_COLUMNS = [
     "open_interest",
     "oi_change",
     "implied_volatility",
+    "context",
 ]
 
 
@@ -116,6 +118,7 @@ class ParquetStorage(Storage):
     def write_option_chain(self, chain: OptionChain) -> int:
         if not chain.quotes:
             return 0
+        context_json = json.dumps(chain.context, default=str)
         rows = [
             {
                 "snapshot_ts": chain.timestamp,
@@ -131,6 +134,7 @@ class ParquetStorage(Storage):
                 "open_interest": q.open_interest,
                 "oi_change": q.oi_change,
                 "implied_volatility": q.implied_volatility,
+                "context": context_json,
             }
             for q in chain.quotes
         ]
@@ -189,6 +193,12 @@ class ParquetStorage(Storage):
                 for r in snap.itertuples(index=False)
             ]
             first = snap.iloc[0]
+            context = {}
+            if "context" in snap.columns and pd.notna(first.get("context")):
+                try:
+                    context = json.loads(first["context"])
+                except (ValueError, TypeError):
+                    context = {}
             chains.append(
                 OptionChain(
                     underlying=str(first["underlying"]),
@@ -196,6 +206,7 @@ class ParquetStorage(Storage):
                     expiry=pd.Timestamp(first["expiry"]).date(),
                     timestamp=pd.Timestamp(snap_ts).to_pydatetime(),
                     quotes=tuple(quotes),
+                    context=context,
                 )
             )
         return chains

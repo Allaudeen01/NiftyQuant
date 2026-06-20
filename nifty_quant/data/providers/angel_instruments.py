@@ -142,6 +142,19 @@ class InstrumentMaster:
                     expiries.add(d)
         return sorted(expiries)
 
+    def index_token(self, name: str, *, exch_seg: str = "NSE") -> str | None:
+        """Resolve an index token by name (e.g. 'INDIA VIX', 'NIFTY')."""
+        name = name.upper()
+        for rec in self._ensure_loaded():
+            if (
+                rec.get("exch_seg") == exch_seg
+                and rec.get("instrumenttype") in ("AMXIDX", "", None)
+                and (rec.get("name", "").upper() == name
+                     or rec.get("symbol", "").upper() == name)
+            ):
+                return str(rec["token"])
+        return None
+
 
 def _parse_expiry(value: str) -> date | None:
     if not value:
