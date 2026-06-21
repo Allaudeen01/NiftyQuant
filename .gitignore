@@ -1,6 +1,7 @@
 # --- Generated artifacts & datasets (root-anchored so they don't match
 #     source packages like nifty_quant/data/) ---
 /data/
+/data_test/
 /experiments/
 /reports/
 /logs/

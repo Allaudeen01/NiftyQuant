@@ -28,8 +28,8 @@ SETUP (once, this weekend)
        ANGEL_API_KEY, ANGEL_CLIENT_CODE, ANGEL_MPIN (or ANGEL_PASSWORD),
        ANGEL_TOTP_SECRET
   2. pip install smartapi-python pyotp
-  3. Dry run a single poll (works any time, ignores market hours):
-       python scripts/collect_market_data.py --once --ignore-market-hours
+  3. Dry run a single poll (sandbox; writes to data_test/, ignores hours):
+       python scripts/collect_market_data.py --once --ignore-market-hours --test
 
 MONDAY (and every trading day)
 ------------------------------
@@ -60,6 +60,23 @@ IST = timezone(timedelta(hours=5, minutes=30))
 SESSION_OPEN = dtime(9, 15)
 SESSION_CLOSE = dtime(15, 30)
 
+# Known NSE trading holidays (equity segment). VERIFY/UPDATE against the
+# official NSE calendar each year -- an out-of-date entry could wrongly block a
+# real trading day. Weekends are always treated as closed regardless of this set.
+NSE_HOLIDAYS: set[date] = {
+    # --- 2026 (best-effort; confirm on the official NSE list) ---
+    date(2026, 1, 26),   # Republic Day
+    date(2026, 3, 6),    # Holi
+    date(2026, 3, 21),   # (placeholder/verify)
+    date(2026, 4, 3),    # Good Friday
+    date(2026, 4, 14),   # Dr. Ambedkar Jayanti
+    date(2026, 5, 1),    # Maharashtra Day
+    date(2026, 8, 15),   # Independence Day (Sat)
+    date(2026, 10, 2),   # Gandhi Jayanti
+    date(2026, 11, 9),   # Diwali (verify; muhurat session separate)
+    date(2026, 12, 25),  # Christmas
+}
+
 _STOP = False
 
 
@@ -80,6 +97,9 @@ def parse_args() -> argparse.Namespace:
                    help="Keep strikes within +/- this %% of spot (0 = all).")
     p.add_argument("--poll", type=float, default=60.0, help="Seconds between polls.")
     p.add_argument("--data-dir", default="data")
+    p.add_argument("--test", "--sandbox", dest="test", action="store_true",
+                   help="Sandbox mode: write to data_test/ (never the production "
+                        "data/ warehouse).")
     p.add_argument("--once", action="store_true", help="Single poll then exit (dry run).")
     p.add_argument("--ignore-market-hours", action="store_true",
                    help="Poll regardless of session window (for testing).")
@@ -88,6 +108,17 @@ def parse_args() -> argparse.Namespace:
 
 def now_ist() -> datetime:
     return datetime.now(IST)
+
+
+def market_closed_reason(d: date) -> str | None:
+    """Return a reason string if the market is closed on ``d``, else None."""
+    if d.weekday() == 5:
+        return "Saturday"
+    if d.weekday() == 6:
+        return "Sunday"
+    if d in NSE_HOLIDAYS:
+        return "NSE holiday"
+    return None
 
 
 def in_session(dt: datetime) -> bool:
@@ -268,6 +299,20 @@ def main() -> int:
     args = parse_args()
     load_dotenv()
     signal.signal(signal.SIGINT, _handle_sigint)
+
+    # Sandbox isolation: in test mode, never touch the production warehouse.
+    if args.test:
+        args.data_dir = "data_test"
+        print("TEST MODE - No production data will be written.")
+
+    # Startup safety: refuse to run on a closed market unless explicitly in
+    # test/sandbox mode or overriding the session window.
+    if not args.test and not args.ignore_market_hours:
+        reason = market_closed_reason(now_ist().date())
+        if reason:
+            print(f"Market is closed ({reason}). Collector exited without "
+                  f"writing any production data.")
+            return 0
 
     try:
         from nifty_quant.data.providers.angelone import AngelOneProvider
