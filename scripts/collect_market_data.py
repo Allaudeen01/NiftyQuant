@@ -96,6 +96,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--strike-band-pct", type=float, default=10.0,
                    help="Keep strikes within +/- this %% of spot (0 = all).")
     p.add_argument("--poll", type=float, default=60.0, help="Seconds between polls.")
+    p.add_argument("--request-pause", type=float, default=1.1,
+                   help="Seconds between underlying API requests (raise to avoid "
+                        "Angel rate-limit errors).")
     p.add_argument("--data-dir", default="data")
     p.add_argument("--test", "--sandbox", dest="test", action="store_true",
                    help="Sandbox mode: write to data_test/ (never the production "
@@ -264,7 +267,30 @@ def read_snapshots_for_day(data_dir: str, day: date) -> list[OptionChain]:
     return chains
 
 
-def poll_once(provider, data_dir, underlying, expiries, band_pct) -> None:
+def _is_rate_limit(exc: Exception) -> bool:
+    s = str(exc).lower()
+    return "access rate" in s or "access denied" in s or "rate" in s and "exceed" in s
+
+
+def fetch_chain_with_retry(provider, underlying, expiry, *, retries=3, backoff=4.0):
+    """Fetch one expiry's chain, retrying on Angel rate-limit errors."""
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            return provider.get_option_chain(underlying, expiry)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if _is_rate_limit(exc) and attempt < retries - 1:
+                wait = backoff * (attempt + 1)
+                _log.event("chain_retry", level=30, expiry=expiry.isoformat(),
+                           attempt=attempt + 1, wait_s=wait)
+                time.sleep(wait)
+                continue
+            raise
+    raise last_exc  # pragma: no cover
+
+
+def poll_once(provider, data_dir, underlying, expiries, band_pct, expiry_gap=1.5) -> None:
     ts = now_ist()
     vix = None
     try:
@@ -275,9 +301,11 @@ def poll_once(provider, data_dir, underlying, expiries, band_pct) -> None:
         _log.event("vix_fetch_failed", level=30, error=str(exc))
 
     chains: list[OptionChain] = []
-    for expiry in expiries:
+    for i, expiry in enumerate(expiries):
+        if i > 0:
+            time.sleep(expiry_gap)  # space requests under Angel's rate limit
         try:
-            chain = provider.get_option_chain(underlying, expiry)
+            chain = fetch_chain_with_retry(provider, underlying, expiry)
             chains.append(trim_to_band(chain, band_pct, vix))
         except Exception as exc:  # noqa: BLE001
             _log.event("chain_fetch_failed", level=40, expiry=expiry.isoformat(),
@@ -287,12 +315,14 @@ def poll_once(provider, data_dir, underlying, expiries, band_pct) -> None:
     if chains:
         path = write_snapshot(data_dir, ts, chains)
         total_q = sum(len(c.quotes) for c in chains)
+        complete = len(chains) == len(expiries)
         _log.event("snapshot_written", underlying=underlying,
                    expiries=[e.isoformat() for e in expiries], quotes=total_q,
-                   india_vix=vix, path=str(path))
+                   complete=complete, india_vix=vix, path=str(path))
         spots = ", ".join(f"{c.expiry}:{c.spot:.0f}" for c in chains)
+        flag = "" if complete else "  [PARTIAL]"
         print(f"[{ts:%H:%M:%S}] {underlying} vix={vix} | {total_q} quotes "
-              f"-> {path.name}  ({spots})")
+              f"-> {path.name}  ({spots}){flag}")
 
 
 def main() -> int:
@@ -317,6 +347,7 @@ def main() -> int:
     try:
         from nifty_quant.data.providers.angelone import AngelOneProvider
         provider = AngelOneProvider.from_env()   # live_trading_enabled stays False
+        provider.request_pause = args.request_pause  # throttle to respect rate limits
     except Exception as exc:  # noqa: BLE001
         print(f"[collector] could not start Angel provider: {exc}")
         print("  - check .env creds and `pip install smartapi-python pyotp`")
