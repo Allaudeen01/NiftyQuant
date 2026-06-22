@@ -5,6 +5,6 @@ transforms over price/option data whose outputs feed the strategy engine and
 the (later) LLM explanation layer.
 """
 
-from nifty_quant.analytics import indicators, options, black_scholes
+from nifty_quant.analytics import indicators, options, black_scholes, stat_tests
 
-__all__ = ["indicators", "options", "black_scholes"]
+__all__ = ["indicators", "options", "black_scholes", "stat_tests"]
