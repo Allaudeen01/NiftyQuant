@@ -267,26 +267,31 @@ def read_snapshots_for_day(data_dir: str, day: date) -> list[OptionChain]:
     return chains
 
 
-def _is_rate_limit(exc: Exception) -> bool:
+def _is_retryable(exc: Exception) -> bool:
+    """Transient errors worth retrying: rate limits and network blips."""
     s = str(exc).lower()
-    return "access rate" in s or "access denied" in s or "rate" in s and "exceed" in s
+    rate = "access rate" in s or "access denied" in s or ("rate" in s and "exceed" in s)
+    network = ("timed out" in s or "timeout" in s or "max retries" in s
+               or "connection" in s or "temporarily unavailable" in s)
+    return rate or network
 
 
 def fetch_chain_with_retry(provider, underlying, expiry, *, retries=3, backoff=4.0):
-    """Fetch one expiry's chain, retrying on Angel rate-limit errors."""
+    """Fetch one expiry's chain, retrying on Angel rate-limit or network errors."""
     last_exc = None
     for attempt in range(retries):
         try:
             return provider.get_option_chain(underlying, expiry)
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
-            if _is_rate_limit(exc) and attempt < retries - 1:
+            if _is_retryable(exc) and attempt < retries - 1:
                 wait = backoff * (attempt + 1)
                 _log.event("chain_retry", level=30, expiry=expiry.isoformat(),
-                           attempt=attempt + 1, wait_s=wait)
+                           attempt=attempt + 1, wait_s=wait, error=str(exc)[:80])
                 time.sleep(wait)
                 continue
             raise
+    raise last_exc  # pragma: no cover
     raise last_exc  # pragma: no cover
 
 
