@@ -91,13 +91,15 @@ class AngelOneProvider(BrokerProvider):
         live_trading_enabled: bool = False,
         request_pause: float = 0.34,
         instrument_master: Any = None,
+        spot_cache_ttl: float = 30.0,
     ) -> None:
         """Wrap an already-authenticated SmartConnect client.
 
-        ``request_pause`` throttles chunked historical requests to respect
-        SmartAPI rate limits (set 0 in tests). ``instrument_master`` is an
-        :class:`InstrumentMaster` used to resolve option tokens; created lazily
-        if not supplied.
+        ``request_pause`` is the minimum interval (seconds) enforced between
+        ANY two SDK calls (global pacing to respect SmartAPI rate limits; set 0
+        in tests). ``spot_cache_ttl`` briefly caches the spot so building
+        several option chains in one polling cycle does not re-fetch it.
+        ``instrument_master`` resolves option tokens; created lazily if absent.
         """
         self._client = client
         self.exchange = exchange
@@ -105,6 +107,18 @@ class AngelOneProvider(BrokerProvider):
         self.live_trading_enabled = live_trading_enabled
         self.request_pause = request_pause
         self._instrument_master = instrument_master
+        self.spot_cache_ttl = spot_cache_ttl
+        self._last_api_call = 0.0
+        self._spot_cache: dict[str, tuple[float, float]] = {}
+
+    def _throttle(self) -> None:
+        """Enforce a minimum interval between consecutive SDK calls."""
+        if self.request_pause <= 0:
+            return
+        wait = self.request_pause - (time.monotonic() - self._last_api_call)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_api_call = time.monotonic()
 
     # --- constructors / auth ------------------------------------------------
 
@@ -180,14 +194,13 @@ class AngelOneProvider(BrokerProvider):
                 "fromdate": f"{chunk_start.isoformat()} 09:15",
                 "todate": f"{chunk_end.isoformat()} 15:30",
             }
+            self._throttle()
             resp = self._client.getCandleData(params)
             for row in (resp or {}).get("data", []) or []:
                 candle = _map_candle(row)
                 if candle.timestamp not in seen:
                     seen.add(candle.timestamp)
                     candles.append(candle)
-            if self.request_pause > 0:
-                time.sleep(self.request_pause)
 
         candles.sort(key=lambda c: c.timestamp)
         _log.event(
@@ -197,13 +210,24 @@ class AngelOneProvider(BrokerProvider):
         return OHLCVSeries(symbol=symbol, timeframe=timeframe, candles=candles)
 
     def get_spot(self, symbol: str) -> float:
-        """Latest close via the most recent daily candle (no extra endpoint)."""
+        """Latest close via the most recent daily candle (cached briefly).
+
+        Cached for ``spot_cache_ttl`` seconds so building several option chains
+        in one polling cycle does not re-fetch the same spot.
+        """
+        key = symbol.upper()
+        cached = self._spot_cache.get(key)
+        now = time.monotonic()
+        if cached is not None and (now - cached[0]) < self.spot_cache_ttl:
+            return cached[1]
         end = datetime.now().date()
         start = end - timedelta(days=7)
         series = self.get_ohlcv(symbol, "1d", start, end)
         if not series.candles:
             raise RuntimeError(f"no recent candles for {symbol!r}")
-        return series.candles[-1].close
+        spot = series.candles[-1].close
+        self._spot_cache[key] = (now, spot)
+        return spot
 
     def get_option_chain(self, underlying: str, expiry: date) -> OptionChain:
         """Build an option-chain snapshot from the instrument master + market data.
@@ -259,6 +283,7 @@ class AngelOneProvider(BrokerProvider):
         token = master.index_token("INDIA VIX", exch_seg="NSE")
         if token is None:
             return None
+        self._throttle()
         resp = self._client.getMarketData("LTP", {"NSE": [token]})
         data = (resp or {}).get("data", {}) if isinstance(resp, dict) else {}
         fetched = data.get("fetched", []) or []
@@ -277,11 +302,10 @@ class AngelOneProvider(BrokerProvider):
         fetched: list[dict] = []
         for i in range(0, len(tokens), 50):
             batch = tokens[i:i + 50]
+            self._throttle()
             resp = self._client.getMarketData("FULL", {"NFO": batch})
             data = (resp or {}).get("data", {}) if isinstance(resp, dict) else {}
             fetched.extend(data.get("fetched", []) or [])
-            if self.request_pause > 0:
-                time.sleep(self.request_pause)
         return fetched
 
     # --- execution (gated) --------------------------------------------------
