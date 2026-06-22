@@ -210,24 +210,51 @@ class AngelOneProvider(BrokerProvider):
         return OHLCVSeries(symbol=symbol, timeframe=timeframe, candles=candles)
 
     def get_spot(self, symbol: str) -> float:
-        """Latest close via the most recent daily candle (cached briefly).
+        """Live index spot via LTP (cached briefly), daily-candle as fallback.
 
-        Cached for ``spot_cache_ttl`` seconds so building several option chains
-        in one polling cycle does not re-fetch the same spot.
+        Uses ``getMarketData`` LTP on the index token for the TRUE live index
+        level -- correct for moneyness / ATM selection / realized-move research.
+        Falls back to the most recent daily-candle close only if the LTP call
+        fails or returns nothing. Cached for ``spot_cache_ttl`` so several
+        option chains in one polling cycle share one spot read.
         """
         key = symbol.upper()
         cached = self._spot_cache.get(key)
         now = time.monotonic()
         if cached is not None and (now - cached[0]) < self.spot_cache_ttl:
             return cached[1]
-        end = datetime.now().date()
-        start = end - timedelta(days=7)
-        series = self.get_ohlcv(symbol, "1d", start, end)
-        if not series.candles:
-            raise RuntimeError(f"no recent candles for {symbol!r}")
-        spot = series.candles[-1].close
+
+        spot = self._live_index_ltp(symbol)
+        if spot is None:
+            # Fallback: most recent daily candle close (lagged, last resort).
+            end = datetime.now().date()
+            start = end - timedelta(days=7)
+            series = self.get_ohlcv(symbol, "1d", start, end)
+            if not series.candles:
+                raise RuntimeError(
+                    f"no spot for {symbol!r} (LTP and daily candle both empty)"
+                )
+            spot = series.candles[-1].close
         self._spot_cache[key] = (now, spot)
         return spot
+
+    def _live_index_ltp(self, symbol: str) -> float | None:
+        """Live index LTP via getMarketData; None on any failure (caller falls back)."""
+        try:
+            token = self.resolve_token(symbol)
+        except KeyError:
+            return None
+        try:
+            self._throttle()
+            resp = self._client.getMarketData("LTP", {self.exchange: [token]})
+        except Exception:  # noqa: BLE001 - any failure -> fall back to candle
+            return None
+        data = (resp or {}).get("data", {}) if isinstance(resp, dict) else {}
+        fetched = data.get("fetched", []) or []
+        if not fetched:
+            return None
+        ltp = float(fetched[0].get("ltp", 0.0) or 0.0)
+        return ltp if ltp > 0 else None
 
     def get_option_chain(self, underlying: str, expiry: date) -> OptionChain:
         """Build an option-chain snapshot from the instrument master + market data.

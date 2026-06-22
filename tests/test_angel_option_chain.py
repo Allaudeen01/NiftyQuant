@@ -73,8 +73,10 @@ class FakeClientForChain:
         assert mode in ("FULL", "LTP")
         if mode == "LTP":
             tok = exchange_tokens["NSE"][0]
+            # Token-aware LTP: NIFTY index vs India VIX (spot now reads live LTP).
+            ltp = 25050.0 if tok == "99926000" else 13.42
             return {"status": True, "data": {
-                "fetched": [{"symbolToken": tok, "ltp": 13.42}], "unfetched": []}}
+                "fetched": [{"symbolToken": tok, "ltp": ltp}], "unfetched": []}}
         tokens = exchange_tokens["NFO"]
         fetched = []
         for t in tokens:
