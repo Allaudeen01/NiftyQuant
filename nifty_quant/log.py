@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 _CONFIGURED = False
@@ -84,3 +86,22 @@ def get_logger(name: str) -> StructuredLogger:
     if not _CONFIGURED:
         configure()
     return StructuredLogger(logging.getLogger(name), {})
+
+
+def add_file_logging(path: str | Path, level: int = logging.INFO) -> None:
+    """Attach a JSON file handler to the root logger (in addition to console).
+
+    Idempotent: re-calling with the same path does not add a duplicate handler.
+    Used by long-running unattended jobs so failures are auditable after the fact.
+    """
+    if not _CONFIGURED:
+        configure(level)
+    target = os.path.abspath(str(path))
+    root = logging.getLogger()
+    for h in root.handlers:
+        if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == target:
+            return  # already attached
+    Path(target).parent.mkdir(parents=True, exist_ok=True)
+    fh = logging.FileHandler(target, encoding="utf-8")
+    fh.setFormatter(JsonFormatter())
+    root.addHandler(fh)

@@ -136,8 +136,13 @@ def pick_expiries(master, underlying: str, n: int) -> list[date]:
     return future[:n]
 
 
-def trim_to_band(chain: OptionChain, band_pct: float, india_vix: float | None) -> OptionChain:
-    """Return a new chain with strikes within +/- band_pct of spot and VIX in context."""
+def trim_to_band(chain: OptionChain, band_pct: float, india_vix: float | None,
+                 timestamp: datetime | None = None) -> OptionChain:
+    """Return a new chain with strikes within +/- band_pct of spot and VIX in context.
+
+    ``timestamp`` (naive IST) overrides the provider's timestamp so the stored
+    snapshot_ts is consistent with the file path and with the candle warehouse.
+    """
     quotes = chain.quotes
     if band_pct > 0 and chain.spot > 0:
         band = chain.spot * band_pct / 100.0
@@ -149,7 +154,7 @@ def trim_to_band(chain: OptionChain, band_pct: float, india_vix: float | None) -
         underlying=chain.underlying,
         spot=chain.spot,
         expiry=chain.expiry,
-        timestamp=chain.timestamp,
+        timestamp=timestamp or chain.timestamp,
         quotes=quotes,
         context=context,
     )
@@ -292,11 +297,12 @@ def fetch_chain_with_retry(provider, underlying, expiry, *, retries=3, backoff=4
                 continue
             raise
     raise last_exc  # pragma: no cover
-    raise last_exc  # pragma: no cover
 
 
 def poll_once(provider, data_dir, underlying, expiries, band_pct, expiry_gap=1.5) -> None:
-    ts = now_ist()
+    # Naive IST wall-clock: consistent with the file path AND the (tz-naive IST)
+    # candle warehouse, so option data joins cleanly to realized vol later.
+    ts = now_ist().replace(tzinfo=None)
     vix = None
     try:
         vix = provider.get_india_vix()
@@ -311,29 +317,39 @@ def poll_once(provider, data_dir, underlying, expiries, band_pct, expiry_gap=1.5
             time.sleep(expiry_gap)  # space requests under Angel's rate limit
         try:
             chain = fetch_chain_with_retry(provider, underlying, expiry)
-            chains.append(trim_to_band(chain, band_pct, vix))
+            chains.append(trim_to_band(chain, band_pct, vix, timestamp=ts))
         except Exception as exc:  # noqa: BLE001
             _log.event("chain_fetch_failed", level=40, expiry=expiry.isoformat(),
                        error=str(exc))
             print(f"[{ts:%H:%M:%S}] chain fetch FAILED for {expiry}: {exc}")
 
-    if chains:
+    if not chains:
+        return
+    try:
         path = write_snapshot(data_dir, ts, chains)
-        total_q = sum(len(c.quotes) for c in chains)
-        complete = len(chains) == len(expiries)
-        _log.event("snapshot_written", underlying=underlying,
-                   expiries=[e.isoformat() for e in expiries], quotes=total_q,
-                   complete=complete, india_vix=vix, path=str(path))
-        spots = ", ".join(f"{c.expiry}:{c.spot:.0f}" for c in chains)
-        flag = "" if complete else "  [PARTIAL]"
-        print(f"[{ts:%H:%M:%S}] {underlying} vix={vix} | {total_q} quotes "
-              f"-> {path.name}  ({spots}){flag}")
+    except Exception as exc:  # noqa: BLE001 - a write error must not kill the day
+        _log.event("snapshot_write_failed", level=40, error=str(exc))
+        print(f"[{ts:%H:%M:%S}] snapshot WRITE FAILED (continuing): {exc}")
+        return
+    total_q = sum(len(c.quotes) for c in chains)
+    complete = len(chains) == len(expiries)
+    _log.event("snapshot_written", underlying=underlying,
+               expiries=[e.isoformat() for e in expiries], quotes=total_q,
+               complete=complete, india_vix=vix, path=str(path))
+    spots = ", ".join(f"{c.expiry}:{c.spot:.0f}" for c in chains)
+    flag = "" if complete else "  [PARTIAL]"
+    print(f"[{ts:%H:%M:%S}] {underlying} vix={vix} | {total_q} quotes "
+          f"-> {path.name}  ({spots}){flag}")
 
 
 def main() -> int:
     args = parse_args()
     load_dotenv()
     signal.signal(signal.SIGINT, _handle_sigint)
+
+    # Persistent structured log so unattended failures are auditable later.
+    from nifty_quant.log import add_file_logging
+    add_file_logging(Path("logs") / f"collector_{now_ist():%Y%m%d}.log")
 
     # Sandbox isolation: in test mode, never touch the production warehouse.
     if args.test:
@@ -380,8 +396,12 @@ def main() -> int:
     while not _STOP:
         dt = now_ist()
         if args.ignore_market_hours or in_session(dt):
-            poll_once(provider, args.data_dir, args.underlying,
-                      expiries, args.strike_band_pct)
+            try:
+                poll_once(provider, args.data_dir, args.underlying,
+                          expiries, args.strike_band_pct)
+            except Exception as exc:  # noqa: BLE001 - one bad poll must not end the day
+                _log.event("poll_failed", level=40, error=str(exc))
+                print(f"[{dt:%H:%M:%S}] poll error (continuing): {exc}")
             polls += 1
         else:
             # Outside session: idle-log occasionally, exit after close on weekdays.
