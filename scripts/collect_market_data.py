@@ -79,6 +79,7 @@ NSE_HOLIDAYS: set[date] = {
 }
 
 _STOP = False
+_PREV_VIX: float | None = None
 
 
 def _handle_sigint(signum, frame):  # graceful Ctrl+C
@@ -134,6 +135,9 @@ def parse_args() -> argparse.Namespace:
                    help="Sandbox mode: write to data_test/ (never the production "
                         "data/ warehouse).")
     p.add_argument("--once", action="store_true", help="Single poll then exit (dry run).")
+    p.add_argument("--monitor", action="store_true",
+                   help="Live lens: print a situational-awareness line each poll "
+                        "and log observations (read-only, no signals).")
     p.add_argument("--ignore-market-hours", action="store_true",
                    help="Poll regardless of session window (for testing).")
     return p.parse_args()
@@ -329,7 +333,8 @@ def fetch_chain_with_retry(provider, underlying, expiry, *, retries=3, backoff=4
     raise last_exc  # pragma: no cover
 
 
-def poll_once(provider, data_dir, underlying, expiries, band_pct, expiry_gap=1.5) -> None:
+def poll_once(provider, data_dir, underlying, expiries, band_pct, expiry_gap=1.5,
+              monitor=False) -> None:
     # Naive IST wall-clock: consistent with the file path AND the (tz-naive IST)
     # candle warehouse, so option data joins cleanly to realized vol later.
     ts = now_ist().replace(tzinfo=None)
@@ -370,6 +375,56 @@ def poll_once(provider, data_dir, underlying, expiries, band_pct, expiry_gap=1.5
     flag = "" if complete else "  [PARTIAL]"
     print(f"[{ts:%H:%M:%S}] {underlying} vix={vix} | {total_q} quotes "
           f"-> {path.name}  ({spots}){flag}")
+
+    if monitor:
+        _run_monitor(data_dir, chains, vix)
+
+
+def _print_history_context(data_dir) -> None:
+    """At startup, summarise accumulated history and the sample-gated checks."""
+    try:
+        from nifty_quant.research import live_lens as lens
+        ctx = lens.HistoricalContext.load(data_dir)
+        n = len(ctx.rows)
+        print(f"[LENS] historical context: {n} collected day(s) loaded")
+        if n:
+            last = ctx.rows[-1]
+            print(f"[LENS]   most recent: {last['date']} "
+                  f"move {last.get('realized_move_pct', float('nan')):.2f}% "
+                  f"VIX_close {last.get('vix_close', float('nan'))}")
+        print("[LENS] pre-registered checks (gated by sample size):")
+        for c in ctx.checks():
+            state = c.detail if c.ready else f"ACCUMULATING ({c.n}/{c.need})"
+            print(f"[LENS]   - {c.name}: {state}")
+        print("[LENS] note: checks stay ACCUMULATING until enough data; this is")
+        print("[LENS]       by design -- no patterns are claimed on small samples.")
+    except Exception as exc:  # noqa: BLE001
+        _log.event("history_context_failed", level=30, error=str(exc))
+
+
+def _run_monitor(data_dir, chains, vix) -> None:
+    """Live lens: print a situational-awareness line and log the observation.
+
+    Read-only and signal-free; failures here must never affect collection.
+    """
+    global _PREV_VIX
+    try:
+        from nifty_quant.research import live_lens as lens
+        near = min(chains, key=lambda c: c.expiry)  # nearest expiry
+        print("   LENS  " + lens.status_line(near, vix, _PREV_VIX))
+        obs = lens.snapshot_metrics(near, vix)
+        obs["timestamp"] = obs["timestamp"].isoformat()
+        obs["expiry"] = str(obs["expiry"])
+        day = now_ist().date().isoformat()
+        opath = Path("logs") / f"observations_{day}.jsonl"
+        opath.parent.mkdir(parents=True, exist_ok=True)
+        with open(opath, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(obs, default=str) + "\n")
+    except Exception as exc:  # noqa: BLE001 - lens must never break collection
+        _log.event("monitor_failed", level=30, error=str(exc))
+    finally:
+        if vix is not None:
+            _PREV_VIX = vix
 
 
 def main() -> int:
@@ -422,6 +477,9 @@ def main() -> int:
     print("NO ORDERS are placed. Ctrl+C to stop.")
     print("=" * 80)
 
+    if args.monitor:
+        _print_history_context(args.data_dir)
+
     _prevent_sleep()  # keep Windows from sleeping/suspending us mid-session
     polls = 0
     try:
@@ -430,7 +488,7 @@ def main() -> int:
             if args.ignore_market_hours or in_session(dt):
                 try:
                     poll_once(provider, args.data_dir, args.underlying,
-                              expiries, args.strike_band_pct)
+                              expiries, args.strike_band_pct, monitor=args.monitor)
                 except Exception as exc:  # noqa: BLE001 - one bad poll must not end the day
                     _log.event("poll_failed", level=40, error=str(exc))
                     print(f"[{dt:%H:%M:%S}] poll error (continuing): {exc}")
