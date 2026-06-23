@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import signal
+import sys
 import time
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from pathlib import Path
@@ -84,6 +85,35 @@ def _handle_sigint(signum, frame):  # graceful Ctrl+C
     global _STOP
     _STOP = True
     print("\n[collector] stop requested; finishing current poll...")
+
+
+# Windows: keep the SYSTEM awake while collecting so a sleep/idle timeout can't
+# suspend the process mid-session (the display may still sleep). No-op elsewhere.
+_ES_CONTINUOUS = 0x80000000
+_ES_SYSTEM_REQUIRED = 0x00000001
+
+
+def _prevent_sleep() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetThreadExecutionState(
+            _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED
+        )
+        _log.event("sleep_prevention_enabled")
+    except Exception as exc:  # noqa: BLE001 - best-effort, never fatal
+        _log.event("sleep_prevention_failed", level=30, error=str(exc))
+
+
+def _allow_sleep() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetThreadExecutionState(_ES_CONTINUOUS)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def parse_args() -> argparse.Namespace:
@@ -392,32 +422,36 @@ def main() -> int:
     print("NO ORDERS are placed. Ctrl+C to stop.")
     print("=" * 80)
 
+    _prevent_sleep()  # keep Windows from sleeping/suspending us mid-session
     polls = 0
-    while not _STOP:
-        dt = now_ist()
-        if args.ignore_market_hours or in_session(dt):
-            try:
-                poll_once(provider, args.data_dir, args.underlying,
-                          expiries, args.strike_band_pct)
-            except Exception as exc:  # noqa: BLE001 - one bad poll must not end the day
-                _log.event("poll_failed", level=40, error=str(exc))
-                print(f"[{dt:%H:%M:%S}] poll error (continuing): {exc}")
-            polls += 1
-        else:
-            # Outside session: idle-log occasionally, exit after close on weekdays.
-            if dt.weekday() < 5 and dt.time() > SESSION_CLOSE:
-                print(f"[{dt:%H:%M:%S}] session closed; {polls} polls collected. Exiting.")
-                break
-            print(f"[{dt:%H:%M:%S} IST] outside session window; waiting...")
+    try:
+        while not _STOP:
+            dt = now_ist()
+            if args.ignore_market_hours or in_session(dt):
+                try:
+                    poll_once(provider, args.data_dir, args.underlying,
+                              expiries, args.strike_band_pct)
+                except Exception as exc:  # noqa: BLE001 - one bad poll must not end the day
+                    _log.event("poll_failed", level=40, error=str(exc))
+                    print(f"[{dt:%H:%M:%S}] poll error (continuing): {exc}")
+                polls += 1
+            else:
+                # Outside session: idle-log occasionally, exit after close on weekdays.
+                if dt.weekday() < 5 and dt.time() > SESSION_CLOSE:
+                    print(f"[{dt:%H:%M:%S}] session closed; {polls} polls collected. Exiting.")
+                    break
+                print(f"[{dt:%H:%M:%S} IST] outside session window; waiting...")
 
-        if args.once:
-            print(f"[collector] --once complete ({polls} poll). Exiting.")
-            break
-        # Sleep in short increments so Ctrl+C is responsive.
-        slept = 0.0
-        while slept < args.poll and not _STOP:
-            time.sleep(min(1.0, args.poll - slept))
-            slept += 1.0
+            if args.once:
+                print(f"[collector] --once complete ({polls} poll). Exiting.")
+                break
+            # Sleep in short increments so Ctrl+C is responsive.
+            slept = 0.0
+            while slept < args.poll and not _STOP:
+                time.sleep(min(1.0, args.poll - slept))
+                slept += 1.0
+    finally:
+        _allow_sleep()  # restore normal power behaviour on exit
 
     print(f"[collector] stopped after {polls} polls.")
     return 0
