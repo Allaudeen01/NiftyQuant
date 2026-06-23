@@ -1,0 +1,6 @@
+# Shell scripts MUST use LF endings so they run on Linux/EC2 (CRLF breaks the
+# shebang: "/usr/bin/env bash^M: bad interpreter"). Force LF regardless of OS.
+*.sh text eol=lf
+
+# Normalize text files; let Git handle line endings for the rest.
+* text=auto
