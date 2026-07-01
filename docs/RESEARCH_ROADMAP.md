@@ -55,7 +55,22 @@ running, use expanding walk-forward, correct for multiple testing, and accept
 **The prize, forward-only:**
 11. **027 Volatility Risk Premium (IV vs RV)** — the reason option chains are
     being collected. Needs ~20+ collected option-days (currently ~6); the live
-    lens already gates this. This is the endgame, not a today task.
+    lens already gates this. This is the endgame, not a today task. **Macro
+    validated:** Exp 028 (below) confirms the premium is structurally real.
+
+**Tier-1 additions (done 2026-07-01):**
+- **028 Macro VRP (Go/No-Go)** — ✅ DONE. **GO.** India VIX > subsequent realized
+  vol 80.5% of days over 10y (mean +2.5 vol pts, VIX/RV 1.29×, p≈1e-65, positive
+  10/11 years), stationary (half-life ~24d). Severe negative tail (COVID −65) →
+  CONDITIONAL GO: keep collecting; any short-vol book must be fractionally sized.
+- **024 OHLC estimators** — ✅ DONE. RV5M (incumbent) remains best; Parkinson/GK
+  statistically tied (great daily-only fallbacks); YZ1 worse (overnight
+  mismatch); naive CC +31% worse. Added `vol_estimators.py` (+5 tests).
+- **025 Signature plot** — ⏸ DEFERRED: needs 1-minute data (we have only 5m and
+  coarser). Running 5m→60m would show only the flat coarse side and could not
+  detect bid-ask-bounce, defeating the purpose. Revisit if 1m data is collected.
+- **026 VIX-level augmentation** — pending (test VIX *levels* vs *changes* in
+  HAR; small, snooping-safe via Exp 023 tooling).
 
 **Deferred until a candidate STRATEGY exists (premature now):**
 - **021 Transaction-cost sensitivity** — alpha-vs-cost breakeven curve. Only
