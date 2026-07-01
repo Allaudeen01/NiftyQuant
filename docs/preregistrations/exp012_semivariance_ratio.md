@@ -97,11 +97,28 @@ folds are thin, so per-fold results carry wide error bars and the year-stability
 - **Small / unstable** — ~0.02 incremental R² is modest; may not clear the folds
   or year-stability bars.
 
-## Scoring (to be filled AFTER running)
-- Status: TBD (Supported / Redundant / Rejected / Insufficient)
-- Evidence Score: TBD
-- Confidence Score: TBD
-- Main discovery: TBD
+## Scoring (filled AFTER running — commit 893afc6 design, executed on 472 daily obs)
+- Status: **SUPPORTED** (passed all five locked rules).
+- Key numbers: semivar_ratio HAC t=+2.88 (p=0.004); bootstrap 95% CI [+0.022,+0.133]
+  (excludes 0); incremental OOS R² over the LEVERAGE-augmented baseline = +0.0133
+  mean, positive in 3/4 folds; sign positive in all three years (2024/25/26).
+- **Central discovery:** in the full model the leverage dummy `neg_lag` becomes
+  INSIGNIFICANT (t=−0.57) while `semivar_ratio` stays significant (t=+2.88). The
+  continuous downside/upside variance ratio appears to **subsume** the coarse
+  Exp 006A leverage effect, not merely restate it. It is *how downside-skewed the
+  intraday variance was*, more than *whether the day was down*, that adds
+  forecasting power for next-day RV.
+- Evidence Score: 60/100 (passed a pre-registered, leverage-controlled,
+  walk-forward screen — but small effect ~1.3% incr R², one negative fold, uneven
+  per-year strength, and it originated from a 15-way search on the SAME sample).
+- Confidence Score: 65/100.
+- **Honest limitation:** screen-then-confirm on the same 2-year window is not
+  fresh out-of-sample. The decisive validation is FORWARD — does it hold on new
+  months / the option-chain-era data being collected now?
+- Future work: (1) forward/out-of-sample validation on newly collected data;
+  (2) formalise as an HAR-X volatility model with the semivariance term;
+  (3) re-examine the Exp 006A leverage result as a coarse proxy for this.
+- Scope reminder: this is a VOLATILITY-FORECASTING improvement, NOT a strategy.
 
 ## Explicitly out of scope
 No trading rule, no entry/exit, no sizing. This is a structural forecasting test.
