@@ -150,6 +150,78 @@ def variance_ratio(series, q: int = 2) -> VarianceRatioResult:
     return VarianceRatioResult(float(vr), float(z), float(pvalue), q)
 
 
+# --- tail risk / extreme value theory --------------------------------------
+
+def hill_estimator(data, k: int | None = None, tail: str = "right") -> dict:
+    """Hill estimator of the tail index for a heavy-tailed sample.
+
+    Fits a power-law tail using the ``k`` largest order statistics (right tail)
+    or ``k`` most negative (left tail). Returns the tail index ``alpha`` (larger
+    => thinner tail; ``alpha`` also bounds the number of finite moments), the
+    shape ``xi = 1/alpha`` (the EVT/GPD shape), and an asymptotic std error
+    ``alpha/sqrt(k)``.
+
+    Only defined for a strictly positive tail: values are taken as-is for the
+    right tail and negated for the left tail, then the positive exceedances are
+    used. Default ``k`` is ~10% of the sample (a common rule of thumb; the
+    estimate is sensitive to ``k`` -- scan a range in practice).
+    """
+    x = np.asarray(data, dtype=float)
+    x = x[~np.isnan(x)]
+    if tail == "left":
+        x = -x
+    x = x[x > 0]                       # power-law tail is defined on positives
+    x = np.sort(x)[::-1]               # descending
+    n = len(x)
+    if n < 20:
+        return {"alpha": float("nan"), "xi": float("nan"), "se": float("nan"),
+                "k": 0, "n": n}
+    if k is None:
+        k = max(10, int(0.10 * n))
+    k = min(k, n - 1)
+    top = x[:k + 1]
+    # Hill: xi = (1/k) sum_{i=1..k} ln(x_i) - ln(x_{k+1})
+    xi = float(np.mean(np.log(top[:k])) - math.log(top[k]))
+    if xi <= 0:
+        return {"alpha": float("inf"), "xi": 0.0, "se": float("nan"),
+                "k": k, "n": n}
+    alpha = 1.0 / xi
+    return {"alpha": alpha, "xi": xi, "se": alpha / math.sqrt(k), "k": k, "n": n}
+
+
+def pot_gpd_fit(data, threshold_pct: float = 95.0, tail: str = "left") -> dict:
+    """Peaks-over-threshold: fit a Generalized Pareto to threshold exceedances.
+
+    For ``tail='left'`` the sample is negated so left-tail losses become the
+    upper tail (the usual risk-management convention). Fits a GPD to exceedances
+    above the ``threshold_pct`` percentile via ``scipy.stats.genpareto``.
+
+    Returns the GPD shape ``xi`` (>0 heavy/power-law tail, =0 exponential,
+    <0 bounded), scale ``beta``, the threshold ``u``, the number of exceedances
+    ``n_exceed``, and ``tail_df = 1/xi`` (equivalent Student-t degrees of freedom
+    for xi>0). A positive ``xi`` is the EVT signature of fat tails.
+    """
+    from scipy import stats as _ss
+
+    x = np.asarray(data, dtype=float)
+    x = x[~np.isnan(x)]
+    if tail == "left":
+        x = -x
+    if len(x) < 50:
+        return {"xi": float("nan"), "beta": float("nan"), "u": float("nan"),
+                "n_exceed": 0, "tail_df": float("nan")}
+    u = float(np.percentile(x, threshold_pct))
+    exceed = x[x > u] - u
+    if len(exceed) < 10:
+        return {"xi": float("nan"), "beta": float("nan"), "u": u,
+                "n_exceed": len(exceed), "tail_df": float("nan")}
+    # genpareto.fit with floc=0 (exceedances are >= 0 by construction)
+    xi, _loc, beta = _ss.genpareto.fit(exceed, floc=0.0)
+    tail_df = (1.0 / xi) if xi > 1e-6 else float("inf")
+    return {"xi": float(xi), "beta": float(beta), "u": u,
+            "n_exceed": int(len(exceed)), "tail_df": float(tail_df)}
+
+
 # --- position sizing -------------------------------------------------------
 
 def kelly_fraction(win_prob: float, win_loss_ratio: float) -> float:

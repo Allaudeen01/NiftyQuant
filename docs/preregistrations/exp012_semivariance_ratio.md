@@ -126,5 +126,28 @@ A SUPPORTED result means "add `semivar_ratio` to the volatility model and study
 further" — it is **not** a strategy.
 
 ---
+
+## ⚠️ CONFIDENCE DOWNGRADE (2026-07-01, from Exp 023 — data-snooping control)
+Exp 023 applied White's Reality Check and Hansen's SPA to the original 15-feature
+screen that generated this candidate. On a 236-day pooled expanding walk-forward,
+`semivar_ratio` was the **best** of the 15 features (single-model t=+2.00) but
+did **NOT survive** the data-snooping control: **White RC p=0.110, Hansen SPA
+p=0.223** (both ≥ 0.05). Once the multiplicity of the 15-way search is accounted
+for, its edge is consistent with luck.
+
+This does not erase Exp 012's dedicated confirmation (HAC t=+2.88, bootstrap CI,
+walk-forward), but that confirmation used the **same 2-year window** as the
+screen, so it was never truly out-of-sample — a limitation this document already
+flagged. Combined with the SPA failure, the honest status is now:
+
+> **Exp 012 status: WEAK, UNCONFIRMED CANDIDATE.** Evidence Score revised
+> **60 → 35/100**; Confidence **65 → 40/100**. Do not treat `semivar_ratio` as an
+> established predictor. The decisive test is **forward** out-of-sample data
+> (new months), not any further analysis of the 2024–26 sample.
+
+The original scoring above is preserved unedited for the record; this note
+supersedes its confidence claims.
+
+---
 *Pre-registered 2026-06-30. Provenance: bounded volatility-feature search
 (commit ecba014). To be executed as a separate, subsequent step.*

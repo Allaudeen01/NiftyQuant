@@ -9,9 +9,11 @@ from nifty_quant.analytics.stat_tests import (
     adf_test,
     fractional_kelly,
     half_life,
+    hill_estimator,
     hurst_exponent,
     kelly_fraction,
     kelly_gaussian,
+    pot_gpd_fit,
     variance_ratio,
 )
 
@@ -137,3 +139,38 @@ def test_kelly_gaussian_and_fractional():
 
 def test_kelly_gaussian_zero_variance():
     assert kelly_gaussian(0.01, 0.0) == 0.0
+
+
+# --- tail risk / EVT ------------------------------------------------------
+
+def test_hill_estimator_pareto_recovers_alpha():
+    # Pareto(alpha=3): P(X>x)=x^-alpha. Hill should recover alpha ~ 3.
+    n = 20000
+    u = RNG.uniform(size=n)
+    x = (1 - u) ** (-1 / 3.0)          # inverse-CDF of Pareto(alpha=3, xm=1)
+    est = hill_estimator(x, tail="right")
+    assert est["alpha"] == pytest.approx(3.0, rel=0.20)
+    assert est["xi"] == pytest.approx(1 / 3.0, rel=0.25)
+
+
+def test_hill_estimator_left_tail_and_short():
+    # left tail of a negated Pareto
+    n = 20000
+    u = RNG.uniform(size=n)
+    x = -((1 - u) ** (-1 / 4.0))       # heavy LEFT tail, alpha ~ 4
+    est = hill_estimator(x, tail="left")
+    assert est["alpha"] == pytest.approx(4.0, rel=0.25)
+    # too-short sample -> NaN, no crash
+    assert math.isnan(hill_estimator([1.0, 2.0, 3.0])["alpha"])
+
+
+def test_pot_gpd_heavy_vs_thin_tail():
+    # Student-t(3) is heavy-tailed -> GPD shape xi > 0.
+    heavy = RNG.standard_t(3, size=20000)
+    fit_h = pot_gpd_fit(heavy, threshold_pct=95.0, tail="left")
+    assert fit_h["xi"] > 0.05
+    assert fit_h["n_exceed"] > 100
+    # Gaussian is thin-tailed -> xi near 0 (or slightly negative).
+    thin = RNG.standard_normal(20000)
+    fit_t = pot_gpd_fit(thin, threshold_pct=95.0, tail="left")
+    assert fit_t["xi"] < fit_h["xi"]
