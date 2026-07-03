@@ -8,11 +8,14 @@ features for the strategy engine and inputs to the LLM explanation layer.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, time
 
 import numpy as np
 
 from nifty_quant.analytics import black_scholes as bs
 from nifty_quant.data.models import OptionChain, OptionType
+
+SESSION_CLOSE = time(15, 30)  # NSE regular-session close (IST); expiry settles here
 
 
 def put_call_ratio(chain: OptionChain, by: str = "oi") -> float:
@@ -198,11 +201,17 @@ def atm_iv(chain: OptionChain, r: float = 0.065, q: float = 0.0) -> float | None
 
 
 def _years_to_expiry(chain: OptionChain) -> float:
-    """Calendar-day year fraction from chain timestamp to expiry close."""
-    seconds = (
-        chain.expiry.toordinal() - chain.timestamp.date().toordinal()
-    ) * 86400.0
-    # Add intraday remainder to end-of-day expiry (~15:30 IST close approx).
+    """Year fraction from the chain timestamp to the expiry's 15:30 close.
+
+    Uses intraday time remaining (not whole calendar days), so it stays positive
+    and meaningful on expiry day (0-DTE) instead of collapsing to zero -- which
+    previously caused ATM IV to drop out entirely on expiry sessions.
+    """
+    ts = chain.timestamp
+    if ts.tzinfo is not None:
+        ts = ts.replace(tzinfo=None)
+    close_dt = datetime.combine(chain.expiry, SESSION_CLOSE)
+    seconds = (close_dt - ts).total_seconds()
     return max(seconds, 0.0) / (365.0 * 86400.0)
 
 
