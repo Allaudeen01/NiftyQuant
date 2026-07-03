@@ -99,7 +99,15 @@ def main() -> int:
                   & (all_df["ask"] < all_df["bid"]))
     print(f"\nField sanity over {n} quotes:")
     print(f"  open_interest > 0 : {has_oi:5.1f}%")
-    print(f"  IV present        : {has_iv:5.1f}%")
+    print(f"  IV present (raw)  : {has_iv:5.1f}%  (0% BY DESIGN -- IV is derived, not stored)")
+    # IV is intentionally not stored; report DERIVABLE coverage (compute-on-read)
+    from nifty_quant.research import derive_iv
+    cov = derive_iv.coverage(all_df, sample=4000)
+    med = cov["median_iv"]
+    print(f"  IV derivable      : {cov['coverage_pct']:5.1f}%  "
+          f"(Black-Scholes on {cov['n_evaluated']} sampled quotes; "
+          f"median {med*100:.1f}%)" if med == med else
+          f"  IV derivable      : {cov['coverage_pct']:5.1f}%")
     print(f"  two-sided (bid&ask): {two_sided:5.1f}%")
     print(f"  crossed (ask<bid) : {crossed:5.1f}%  (should be ~0)")
     print(f"  spot range        : {all_df['spot'].min():.1f} - {all_df['spot'].max():.1f}")

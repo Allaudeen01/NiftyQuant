@@ -109,3 +109,47 @@ def test_candle_validation():
 
     with pytest.raises(ValueError):
         Candle(datetime(2026, 1, 1), open=10, high=5, low=8, close=9)
+
+
+def _chain_no_iv():
+    """A chain with realistic ATM prices and NO stored IV, for solving."""
+    expiry = date(2026, 1, 27)
+    ts = datetime(2026, 1, 20, 10, 0, 0)
+    spot = 25000.0
+    # ~7 trading days out; plausible mid prices around a 13% vol.
+    quotes = [
+        OptionQuote(strike=25000, option_type=OptionType.CALL, expiry=expiry,
+                    last_price=0.0, bid=150.0, ask=154.0, open_interest=1000),
+        OptionQuote(strike=25000, option_type=OptionType.PUT, expiry=expiry,
+                    last_price=0.0, bid=148.0, ask=152.0, open_interest=1000),
+    ]
+    return OptionChain(underlying="NIFTY", spot=spot, expiry=expiry,
+                       timestamp=ts, quotes=quotes)
+
+
+def test_with_implied_vols_is_nondestructive_and_solves():
+    chain = _chain_no_iv()
+    enriched = opt.with_implied_vols(chain)
+    # original chain untouched (immutability preserved)
+    assert all(q.implied_volatility is None for q in chain.quotes)
+    # new chain has solvable, sane IVs (roughly 5%-60% annual)
+    ivs = [q.implied_volatility for q in enriched.quotes]
+    assert all(iv is not None and 0.03 < iv < 0.8 for iv in ivs)
+
+
+def test_derive_iv_frame_recovers_iv():
+    import pandas as pd
+    from nifty_quant.research.derive_iv import derive_iv_frame
+    df = pd.DataFrame([
+        {"snapshot_ts": pd.Timestamp("2026-01-20 10:00:00"),
+         "expiry": pd.Timestamp("2026-01-27"), "strike": 25000.0,
+         "option_type": "CE", "last_price": 152.0, "bid": 150.0, "ask": 154.0,
+         "spot": 25000.0},
+        {"snapshot_ts": pd.Timestamp("2026-01-20 10:00:00"),
+         "expiry": pd.Timestamp("2026-01-27"), "strike": 25000.0,
+         "option_type": "PE", "last_price": 150.0, "bid": 148.0, "ask": 152.0,
+         "spot": 25000.0},
+    ])
+    iv = derive_iv_frame(df)
+    assert iv.notna().all()
+    assert ((iv > 0.03) & (iv < 0.8)).all()

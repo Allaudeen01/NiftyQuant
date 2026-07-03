@@ -148,6 +148,30 @@ def gamma_exposure(
     return GammaExposure(total_gex=total, flip_strike=flip, per_strike=per_strike)
 
 
+def with_implied_vols(chain: OptionChain, r: float = 0.065, q: float = 0.0
+                      ) -> OptionChain:
+    """Return a NEW chain with each quote's implied_volatility solved and filled.
+
+    Non-destructive: the input chain and its (frozen) quotes are untouched;
+    fresh objects are returned via ``dataclasses.replace``. IV that cannot be
+    solved (price below intrinsic, zero price, expired) is left as ``None``.
+    """
+    from dataclasses import replace
+
+    t = _years_to_expiry(chain)
+    new_quotes = []
+    for quote in chain.quotes:
+        iv = quote.implied_volatility
+        if (iv is None or iv <= 0) and t > 0:
+            solved = bs.implied_volatility(
+                quote.mid, chain.spot, quote.strike, t, r,
+                quote.option_type.value, q,
+            )
+            iv = solved if (solved is not None and solved > 0) else None
+        new_quotes.append(replace(quote, implied_volatility=iv))
+    return replace(chain, quotes=tuple(new_quotes))
+
+
 def atm_iv(chain: OptionChain, r: float = 0.065, q: float = 0.0) -> float | None:
     """Average implied vol of the ATM call and put (solved if not supplied)."""
     t = _years_to_expiry(chain)
