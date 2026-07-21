@@ -53,10 +53,12 @@ running, use expanding walk-forward, correct for multiple testing, and accept
     expected value; parked.
 
 **The prize, forward-only:**
-11. **027 Volatility Risk Premium (IV vs RV)** — the reason option chains are
-    being collected. Needs ~20+ collected option-days (currently ~6); the live
-    lens already gates this. This is the endgame, not a today task. **Macro
-    validated:** Exp 028 (below) confirms the premium is structurally real.
+11. **027 Volatility Risk Premium (IV vs RV)** — ✅ DONE (gate met: 21 collected
+    days). **CONFIRMS MACRO DIRECTION**: term-matched VRP positive on 12/13
+    eligible days (92%), mean +4.3 vol pts (vs macro Exp 028's +2.5) -- one
+    negative day, one calm-only regime so far. Directional gate-check, NOT a
+    significance claim (n=13); real estimate needs 60-100+ days across mixed
+    regimes. See `docs/preregistrations/exp027_granular_vrp.md`.
 
 **Tier-1 additions (done 2026-07-01):**
 - **028 Macro VRP (Go/No-Go)** — ✅ DONE. **GO.** India VIX > subsequent realized
