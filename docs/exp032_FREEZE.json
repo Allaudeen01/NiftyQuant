@@ -1,0 +1,866 @@
+{
+  "experiment": "EXP 032 -- Multi-Strategy Zoo on collected option chains",
+  "experiment_id": "exp032",
+  "tag": "exp032_final",
+  "status": "FROZEN -- IMMUTABLE. No modifications permitted.",
+  "policy": "Any change to rules, costs, data or code invalidates this freeze and MUST be published as a new experiment id (exp033+). Never edit exp032 in place. Re-running the locked rules on NEW data is an out-of-sample test and must be reported as a separate experiment.",
+  "frozen_at_utc": "2026-09-12T07:56:54.870811+00:00",
+  "preregistration": "docs/preregistrations/exp032_strategy_zoo.md",
+  "manifest_schema": 1,
+  "git": {
+    "commit": "fce18f0bc44534151200172265413c4292f231a9",
+    "commit_short": "fce18f0",
+    "branch": "main",
+    "commit_date": "2026-09-12T13:26:40+05:30",
+    "tree_clean_at_freeze": true,
+    "uncommitted_paths": [],
+    "tag": "exp032_final",
+    "note": "The manifest itself is committed in a child commit; `commit` above is the tree the experiment was RUN against. The tag `exp032_final` points at the commit that includes this manifest."
+  },
+  "strategy_rules": {
+    "experiment_id": "exp032",
+    "rules_version": "exp032-rules-v1.0",
+    "candidates": [
+      {
+        "code": "S1",
+        "name": "VRP Harvesting v1.2",
+        "instrument": "short straddle",
+        "function": "strat_s1_vrp"
+      },
+      {
+        "code": "S2",
+        "name": "OI Concentration Divergence",
+        "instrument": "futures proxy",
+        "function": "strat_s2_oi_divergence"
+      },
+      {
+        "code": "S3",
+        "name": "IV Squeeze -> RV expansion",
+        "instrument": "long straddle",
+        "function": "strat_s3_iv_squeeze"
+      },
+      {
+        "code": "S4",
+        "name": "PCR Extreme Reversal",
+        "instrument": "futures proxy",
+        "function": "strat_s4_pcr_reversal"
+      },
+      {
+        "code": "S5",
+        "name": "Max Pain Magnet (traded leg)",
+        "instrument": "short 0-DTE straddle",
+        "function": "strat_s5_maxpain_trade"
+      },
+      {
+        "code": "S6",
+        "name": "0-DTE Straddle Mispricing",
+        "instrument": "short 0-DTE straddle",
+        "function": "strat_s6_zero_dte"
+      },
+      {
+        "code": "S7",
+        "name": "Overnight Gap Fade",
+        "instrument": "futures proxy",
+        "function": "strat_s7_gap_fade"
+      }
+    ],
+    "clocks": {
+      "entry": "09:20",
+      "exit": "15:25",
+      "midday_signal": "14:00",
+      "first_hour_exit": "10:15"
+    },
+    "thresholds": {
+      "S1_VRP_THRESHOLD_volpts": 2.0,
+      "S1_RV_LOOKBACK_days": 5,
+      "S2_MOVE_THRESHOLD": 0.003,
+      "S3_IV_PCTILE": 20.0,
+      "S3_WARMUP_days": 20,
+      "S4_PCR_HIGH": 1.2,
+      "S4_PCR_LOW": 0.8,
+      "S5_MAXPAIN_PROX": 0.01,
+      "S7_GAP_THRESHOLD": 0.005
+    },
+    "inference": {
+      "HAC_LAG": 5,
+      "FDR_Q": 0.1,
+      "SPA_BLOCK": 10.0,
+      "SPA_NBOOT": 5000,
+      "PIN_NBOOT": 2000,
+      "PIN_BLOCK": 10.0,
+      "TRAIN_FRAC": 0.6
+    },
+    "pricing": {
+      "R_RATE": 0.065,
+      "Q_YIELD": 0.012
+    }
+  },
+  "cost_schedule": {
+    "version": "IN-FO-2026.1",
+    "disclaimer": "Indian F&O retail rates are ASSUMPTIONS as noted in the pre-registration; results are reported with a spread sensitivity sweep.",
+    "LOT_SIZE": 75,
+    "MARGIN_PER_LOT": 150000.0,
+    "BROKERAGE_PER_ORDER": 20.0,
+    "STT_OPT_SELL": 0.001,
+    "EXCH_OPT": 0.0003503,
+    "SEBI_FEE": 1e-06,
+    "STAMP_BUY": 3e-05,
+    "GST_RATE": 0.18,
+    "STT_FUT_SELL": 0.0002,
+    "EXCH_FUT": 1.9e-05,
+    "FUT_SLIP_BPS": 1.0,
+    "SPREAD_MULTS": [
+      0.5,
+      1.0,
+      1.5,
+      2.0
+    ],
+    "BASE_MULT": 1.0
+  },
+  "random_seeds": {
+    "SPA_SEED": 32032,
+    "PIN_SEED": 5051,
+    "spa_n_boot": 5000,
+    "pinning_n_boot": 2000,
+    "determinism_note": "All stochastic steps are stationary bootstraps seeded from these constants via np.random.default_rng; two consecutive runs reproduced identical p-values."
+  },
+  "environment": {
+    "python": "3.11.7",
+    "python_implementation": "CPython",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "key_packages": {
+      "numpy": "2.4.4",
+      "pandas": "2.3.3",
+      "scipy": "1.17.1",
+      "statsmodels": "0.14.6",
+      "pyarrow": "23.0.1"
+    },
+    "installed_distributions_count": 211,
+    "installed_distributions_sha256": "57aff901ce631d71bd91f5340c724a4683c5f753168f3a357b8633e96d13a9fc",
+    "installed_distributions": [
+      "Flask==3.1.3",
+      "GitPython==3.1.50",
+      "ImageIO==2.37.3",
+      "Jinja2==3.1.6",
+      "Mako==1.3.12",
+      "MarkupSafe==3.0.3",
+      "MouseInfo==0.1.3",
+      "PyAutoGUI==0.9.54",
+      "PyGetWindow==0.0.9",
+      "PyMsgBox==2.0.1",
+      "PyMuPDF==1.27.2.3",
+      "PyNaCl==1.6.2",
+      "PyOTP==2.10.0",
+      "PyRect==0.2.0",
+      "PyScreeze==1.0.1",
+      "PyYAML==6.0.3",
+      "Pygments==2.20.0",
+      "SQLAlchemy==2.0.30",
+      "Werkzeug==3.1.8",
+      "aiohappyeyeballs==2.7.1",
+      "aiohttp==3.14.1",
+      "aiosignal==1.4.0",
+      "aiosqlite==0.22.1",
+      "alembic==1.13.1",
+      "altair==6.2.2",
+      "annotated-doc==0.0.4",
+      "annotated-types==0.7.0",
+      "anyio==4.13.0",
+      "arch==8.0.0",
+      "args==0.1.0",
+      "async-timeout==5.0.1",
+      "asyncpg==0.29.0",
+      "attrs==26.1.0",
+      "bcrypt==3.2.2",
+      "beautifulsoup4==4.15.0",
+      "blinker==1.9.0",
+      "boto3==1.43.41",
+      "botocore==1.43.41",
+      "cachetools==7.1.4",
+      "certifi==2025.11.12",
+      "cffi==2.0.0",
+      "charset-normalizer==3.4.7",
+      "choreographer==1.2.1",
+      "click==8.3.2",
+      "clint==0.5.1",
+      "colorama==0.4.6",
+      "comtypes==1.4.16",
+      "contourpy==1.3.3",
+      "cryptography==46.0.7",
+      "curl_cffi==0.15.0",
+      "cycler==0.12.1",
+      "defusedxml==0.7.1",
+      "distro==1.9.0",
+      "dnspython==2.8.0",
+      "easyocr==1.7.2",
+      "ecdsa==0.19.2",
+      "email_validator==2.1.1",
+      "et_xmlfile==2.0.0",
+      "fastapi==0.136.0",
+      "filelock==3.29.0",
+      "fonttools==4.62.1",
+      "fpdf2==2.8.7",
+      "frozenlist==1.8.0",
+      "fsspec==2026.3.0",
+      "gitdb==4.0.12",
+      "google-ai-generativelanguage==0.6.10",
+      "google-api-core==2.30.3",
+      "google-api-python-client==2.194.0",
+      "google-auth-httplib2==0.3.1",
+      "google-auth==2.49.2",
+      "google-genai==1.73.1",
+      "google-generativeai==0.8.3",
+      "google==3.0.0",
+      "googleapis-common-protos==1.74.0",
+      "greenlet==3.5.0",
+      "groq==1.2.0",
+      "growwapi==1.5.0",
+      "grpcio-status==1.71.2",
+      "grpcio==1.80.0",
+      "h11==0.16.0",
+      "hmmlearn==0.3.3",
+      "httpcore==1.0.9",
+      "httplib2==0.31.2",
+      "httptools==0.7.1",
+      "httpx==0.28.1",
+      "hypothesis==6.152.9",
+      "idna==3.11",
+      "iniconfig==2.3.0",
+      "itsdangerous==2.2.0",
+      "jiter==0.14.0",
+      "jmespath==1.1.0",
+      "joblib==1.5.3",
+      "jsonschema-specifications==2025.9.1",
+      "jsonschema==4.26.0",
+      "kaleido==1.2.0",
+      "keyboard==0.13.5",
+      "kiwisolver==1.5.0",
+      "lazy-loader==0.5",
+      "logistro==2.0.1",
+      "logzero==1.7.0",
+      "lxml==6.1.0",
+      "markdown-it-py==4.2.0",
+      "matplotlib==3.10.8",
+      "mdurl==0.1.2",
+      "mpmath==1.3.0",
+      "multidict==6.7.1",
+      "multitasking==0.0.13",
+      "narwhals==2.19.0",
+      "nats-py==2.15.0",
+      "networkx==3.6.1",
+      "nifty_quant==0.1.0",
+      "ninja==1.13.0",
+      "nkeys==0.2.1",
+      "numpy==2.4.4",
+      "openai==2.32.0",
+      "opencv-python-headless==4.13.0.92",
+      "openpyxl==3.1.5",
+      "orjson==3.11.8",
+      "packaging==26.1",
+      "pandas==2.3.3",
+      "passlib==1.7.4",
+      "patsy==1.0.2",
+      "pdfminer.six==20260107",
+      "peewee==4.1.1",
+      "pillow==12.2.0",
+      "pip==24.0",
+      "platformdirs==4.10.0",
+      "plotly==6.7.0",
+      "pluggy==1.6.0",
+      "plyer==2.1.0",
+      "polars-runtime-32==1.40.0",
+      "polars==1.40.0",
+      "propcache==0.5.2",
+      "proto-plus==1.27.2",
+      "protobuf==5.29.6",
+      "pyarrow==23.0.1",
+      "pyasn1==0.6.3",
+      "pyasn1_modules==0.4.2",
+      "pyclipper==1.4.0",
+      "pycparser==3.0",
+      "pydantic-settings==2.14.1",
+      "pydantic==2.13.2",
+      "pydantic_core==2.46.2",
+      "pydeck==0.9.2",
+      "pynput==1.8.1",
+      "pyparsing==3.3.2",
+      "pypdf==6.10.2",
+      "pyperclip==1.11.0",
+      "pypiwin32==223",
+      "pytest-timeout==2.4.0",
+      "pytest==9.0.3",
+      "python-bidi==0.6.7",
+      "python-dateutil==2.9.0.post0",
+      "python-docx==1.2.0",
+      "python-dotenv==1.0.1",
+      "python-jose==3.3.0",
+      "python-multipart==0.0.26",
+      "python-pptx==1.0.2",
+      "pyttsx3==2.99",
+      "pytweening==1.2.0",
+      "pytz==2026.2",
+      "pywin32==311",
+      "referencing==0.37.0",
+      "regex==2026.5.9",
+      "reportlab==4.4.10",
+      "requests==2.33.1",
+      "rich==15.0.0",
+      "rpds-py==2026.5.1",
+      "rsa==4.9.1",
+      "s3transfer==0.19.0",
+      "scikit-image==0.26.0",
+      "scikit-learn==1.8.0",
+      "scipy==1.17.1",
+      "seaborn==0.13.2",
+      "setuptools==65.5.0",
+      "shapely==2.1.2",
+      "simplejson==4.0.1",
+      "six==1.17.0",
+      "smartapi-python==1.5.5",
+      "smmap==5.0.3",
+      "sniffio==1.3.1",
+      "sortedcontainers==2.4.0",
+      "soupsieve==2.8.4",
+      "sse-starlette==2.1.0",
+      "starlette==1.0.0",
+      "statsmodels==0.14.6",
+      "streamlit==1.58.0",
+      "sympy==1.14.0",
+      "tavily-python==0.7.26",
+      "tenacity==9.1.4",
+      "threadpoolctl==3.6.0",
+      "tifffile==2026.3.3",
+      "tiktoken==0.13.0",
+      "toml==0.10.2",
+      "torch==2.11.0",
+      "torchvision==0.26.0",
+      "tqdm==4.67.3",
+      "typing-inspection==0.4.2",
+      "typing_extensions==4.15.0",
+      "tzdata==2026.1",
+      "uritemplate==4.2.0",
+      "urllib3==2.6.3",
+      "uvicorn==0.44.0",
+      "watchdog==6.0.0",
+      "watchfiles==1.1.1",
+      "websocket-client==1.9.0",
+      "websockets==16.0",
+      "xlrd==2.0.2",
+      "xlsxwriter==3.2.9",
+      "yarl==1.24.2",
+      "yfinance==1.5.1"
+    ]
+  },
+  "source_data": {
+    "path": "data/option_chain",
+    "consumed_by_exp032": true,
+    "n_days": 59,
+    "n_files": 9816,
+    "bytes": 156100381,
+    "root_sha256": "23f80a823bb782b2bd39755da1eb6fe5da2b34d404cd07957caea5cfb1d6657c",
+    "per_day": {
+      "2026-06-22": {
+        "n_files": 170,
+        "bytes": 2765205,
+        "day_sha256": "40a2d5d9a6aa45d1544958ba971b6ac64f29e4a628660fed10ebce41a613f379"
+      },
+      "2026-06-23": {
+        "n_files": 147,
+        "bytes": 2313138,
+        "day_sha256": "85c7f457f0039e5824c127acdd1a1ddf54757643b947c3f2b667ece5a890f80c"
+      },
+      "2026-06-24": {
+        "n_files": 162,
+        "bytes": 2572235,
+        "day_sha256": "2fde35f335be7fc4215b6b624f00497041cf219b4374081054f238c980a8983e"
+      },
+      "2026-06-25": {
+        "n_files": 164,
+        "bytes": 2614742,
+        "day_sha256": "fb642645d09c637acd8578625e714f81ba3267f2f427ebf269380a4501d19974"
+      },
+      "2026-06-26": {
+        "n_files": 127,
+        "bytes": 2010010,
+        "day_sha256": "e15bb490a4c2cdfb551248a00fd603e7db070d0aba5d5f98bc7e8ca4debf814a"
+      },
+      "2026-06-29": {
+        "n_files": 165,
+        "bytes": 2618747,
+        "day_sha256": "cdb6393a452263e98519aca0b2b40ca411f789f13019347c758f399a9e592d6e"
+      },
+      "2026-06-30": {
+        "n_files": 165,
+        "bytes": 2584357,
+        "day_sha256": "c1a780404287da3fce86ff711a32ade7aaae8b5faf909a43fd84e2d590eebe6b"
+      },
+      "2026-07-01": {
+        "n_files": 137,
+        "bytes": 2164022,
+        "day_sha256": "f2267ade3e038267e8e1c73c2a4364e33388ecca09955ee39a2e84cbae78bfed"
+      },
+      "2026-07-02": {
+        "n_files": 165,
+        "bytes": 2599842,
+        "day_sha256": "82f409628b10b9fadb3fb4d36dc9a51dc1c1776c120a396408a39f3a001c9fd2"
+      },
+      "2026-07-03": {
+        "n_files": 168,
+        "bytes": 2661875,
+        "day_sha256": "4378c37780868a1c7c86ac47158dbe12ff859c1e23a18c0a7c731d442af89d03"
+      },
+      "2026-07-06": {
+        "n_files": 168,
+        "bytes": 2662458,
+        "day_sha256": "5abb8951a18eef8325b2bee4c3afda4d6fd86df7fc24cc218cebacdc38c5df44"
+      },
+      "2026-07-07": {
+        "n_files": 22,
+        "bytes": 343043,
+        "day_sha256": "f572954504976e1ba94eac38146e1a2262bc8a2d524140b36cdcfd466be48970"
+      },
+      "2026-07-08": {
+        "n_files": 164,
+        "bytes": 2589820,
+        "day_sha256": "6bbc1bd820cc0e9eeeca56428e7c9e49f068c717ccbe44d33d3cb8c726e24cdd"
+      },
+      "2026-07-09": {
+        "n_files": 172,
+        "bytes": 2739091,
+        "day_sha256": "4f5c2c5d92de238098aced88b5bc68310c17cebed9a1b567522d8a4fa80c6a5e"
+      },
+      "2026-07-10": {
+        "n_files": 172,
+        "bytes": 2743096,
+        "day_sha256": "aade2fd974921e9ded5826aee8cf1e3ca92085ab23426c955325bccfff69c393"
+      },
+      "2026-07-13": {
+        "n_files": 172,
+        "bytes": 2744885,
+        "day_sha256": "cfc541fa4e0588014abab7af18eb92edb697f86556e770c5861db1d4d0284b31"
+      },
+      "2026-07-14": {
+        "n_files": 172,
+        "bytes": 2696929,
+        "day_sha256": "6bd44e79a234bf4b75bae3c3749b5e15211b999005c85a1429c45291400485e5"
+      },
+      "2026-07-15": {
+        "n_files": 170,
+        "bytes": 2723002,
+        "day_sha256": "eec18790c9b5d85435fece95457114d8888fda57a6e4ac36d2372a95ebd1f01c"
+      },
+      "2026-07-16": {
+        "n_files": 170,
+        "bytes": 2708104,
+        "day_sha256": "5469d70ae464e7f8b5c1738c02f3b289a4a70e4106a63f7aa5527d3a4b145f35"
+      },
+      "2026-07-17": {
+        "n_files": 170,
+        "bytes": 2724082,
+        "day_sha256": "20d79bd418ecf9fafc591e568f6cd7ea749b6672a76322f020e15982b2b4806c"
+      },
+      "2026-07-20": {
+        "n_files": 170,
+        "bytes": 2696795,
+        "day_sha256": "5713a6ab18ae43251177a4974986eec92f2f6690e5266045711034c9d0cf8530"
+      },
+      "2026-07-21": {
+        "n_files": 113,
+        "bytes": 1769135,
+        "day_sha256": "89e400e5ecf9c64b8dc0f37a4979d27ade5e56960fbe5704231bd0bdc1db7225"
+      },
+      "2026-07-22": {
+        "n_files": 170,
+        "bytes": 2699462,
+        "day_sha256": "c8dab21e59c416bc056a36b9415962eef5e38e66ffaee05af5b464a317160846"
+      },
+      "2026-07-23": {
+        "n_files": 170,
+        "bytes": 2693365,
+        "day_sha256": "f882280ef7b6554829768e439a968b379734cbf2bcc38b2895d82838e2ad8cc8"
+      },
+      "2026-07-24": {
+        "n_files": 170,
+        "bytes": 2705357,
+        "day_sha256": "f35ce9cfd9799476a6b6649d66c51513994e41ad3995f49e8f5d44ab6e8f36d8"
+      },
+      "2026-07-27": {
+        "n_files": 170,
+        "bytes": 2688523,
+        "day_sha256": "46fe3dd6dc41706ee8166314549e05734dcfa511dc118bd7ace8001810844a77"
+      },
+      "2026-07-28": {
+        "n_files": 170,
+        "bytes": 2650715,
+        "day_sha256": "5b240b10746398d03d03cf91f567a3f6bfdcb11ff23a37210b7293713d0baa46"
+      },
+      "2026-07-29": {
+        "n_files": 172,
+        "bytes": 2725101,
+        "day_sha256": "1fffea3effe4da4b121c79c11209b415ec346842517d74e788d80116adf39714"
+      },
+      "2026-07-30": {
+        "n_files": 172,
+        "bytes": 2710760,
+        "day_sha256": "12e7939bb303640b6129e283e8f9566c152aa988f583ef4d071187de5b041740"
+      },
+      "2026-07-31": {
+        "n_files": 172,
+        "bytes": 2730144,
+        "day_sha256": "bfabc1105c0ab04bbea4ffe45bbfaa7b5f332b0856bd4da5823d62d0acb51a9a"
+      },
+      "2026-08-03": {
+        "n_files": 172,
+        "bytes": 2735139,
+        "day_sha256": "ea37191203aae0dc104947ea2c28618b5af0e638be0c54a130f986cb4cd2607a"
+      },
+      "2026-08-04": {
+        "n_files": 169,
+        "bytes": 2664086,
+        "day_sha256": "1fb83e9574f181476197e8ad382ed21edd2977110ea2eb8311910c2e531bb8cb"
+      },
+      "2026-08-05": {
+        "n_files": 169,
+        "bytes": 2692479,
+        "day_sha256": "8adf3531ba876ccdd21c67c1ee98783ef06632eee55ae0d57b654cebc981f22f"
+      },
+      "2026-08-06": {
+        "n_files": 169,
+        "bytes": 2693991,
+        "day_sha256": "a66a588f70f55b2535fe988d50cc32eb4a337829017385e952fbbef029f5c5ae"
+      },
+      "2026-08-07": {
+        "n_files": 169,
+        "bytes": 2693689,
+        "day_sha256": "ad0fa85ba70c7e9b5038b27f38c3dec21d1d378d0773783e2596b49815baaa8b"
+      },
+      "2026-08-10": {
+        "n_files": 169,
+        "bytes": 2680669,
+        "day_sha256": "a43abd6f4459c3aacc034f40830e0ce990f6971e99cf8d1c9d557652eb491ff3"
+      },
+      "2026-08-11": {
+        "n_files": 169,
+        "bytes": 2652364,
+        "day_sha256": "b774d69c1cc7af51bc99a23676097f1a50260e17d062b91a3d46771172c6f1a2"
+      },
+      "2026-08-12": {
+        "n_files": 169,
+        "bytes": 2711542,
+        "day_sha256": "3b50ae948f46ec90b81d437652309c6070e79de6ca9ad0868c4f9aa488527de4"
+      },
+      "2026-08-13": {
+        "n_files": 169,
+        "bytes": 2690949,
+        "day_sha256": "03cf6a66753e77549c18bcea5cb2c8dff6c946f75d9f52a900feebe72e740215"
+      },
+      "2026-08-14": {
+        "n_files": 169,
+        "bytes": 2681078,
+        "day_sha256": "e27e039ba4daee059805517e9052069eca4ee01ff750272d5287c999521cfff9"
+      },
+      "2026-08-17": {
+        "n_files": 169,
+        "bytes": 2668961,
+        "day_sha256": "a80ce4cdbfbd70bb7014f7960a5923b9e29d881292108aab2ff18d8ccccb3a1a"
+      },
+      "2026-08-18": {
+        "n_files": 169,
+        "bytes": 2639127,
+        "day_sha256": "5c9d657d8f43c32e04bce522d40fd652e01b2f779f5eb663b0afc4ad76c97d44"
+      },
+      "2026-08-19": {
+        "n_files": 169,
+        "bytes": 2663818,
+        "day_sha256": "cab273fa316b508c79baacf34de04600a7409d150776ea1be9a2979766d34758"
+      },
+      "2026-08-20": {
+        "n_files": 169,
+        "bytes": 2674329,
+        "day_sha256": "6e8aa06db49de8a0240fccc7e381516161ecd4d6854bafaa900d5db432cf74e5"
+      },
+      "2026-08-24": {
+        "n_files": 169,
+        "bytes": 2658300,
+        "day_sha256": "4d74b149e39703ad64d79ca77af7b1e73cd8775d81ba52a6bad763124b62f5da"
+      },
+      "2026-08-25": {
+        "n_files": 281,
+        "bytes": 5420235,
+        "day_sha256": "ba2e63666ce87b1ab4e635551662e9a9cb315911a4b17024a86d672468fbbf10"
+      },
+      "2026-08-26": {
+        "n_files": 170,
+        "bytes": 2665010,
+        "day_sha256": "c478bc0ef916aa07356d57dfd4bf9f776a7168726bdfad6c7059689933444770"
+      },
+      "2026-08-27": {
+        "n_files": 170,
+        "bytes": 2662810,
+        "day_sha256": "f457209e214c0b1110d6a917f5c168bb48d5dcd38195c2c3484d4c46c0d3d6a7"
+      },
+      "2026-08-28": {
+        "n_files": 170,
+        "bytes": 2672351,
+        "day_sha256": "ec2b10cd64e0f1f71d9252c18cc07b5dcbe667e81e04d70869703059d5cbec81"
+      },
+      "2026-08-31": {
+        "n_files": 170,
+        "bytes": 2664841,
+        "day_sha256": "d2ccf1bd6f36536e8df5c03ba02599ae534ecb62f075ddabb1334a489e269357"
+      },
+      "2026-09-01": {
+        "n_files": 170,
+        "bytes": 2648148,
+        "day_sha256": "32c7bf2d81ba0debea12f8b941fbff6d6975a4e39bef85e594886026a0433414"
+      },
+      "2026-09-02": {
+        "n_files": 172,
+        "bytes": 2691655,
+        "day_sha256": "caf4aaf046105157deafded9943c8b9cfa9ec28a41d5acf6406aad54a1e13853"
+      },
+      "2026-09-03": {
+        "n_files": 172,
+        "bytes": 2692467,
+        "day_sha256": "eca040a66f7288cce40b162e273e48b3c88372a5c68a774896b3a035c2426b39"
+      },
+      "2026-09-04": {
+        "n_files": 172,
+        "bytes": 2691163,
+        "day_sha256": "bf23fe29959410378978302d679cbd7ba27a3e2b14cbf6a6025bb60eaf997e92"
+      },
+      "2026-09-07": {
+        "n_files": 172,
+        "bytes": 2686962,
+        "day_sha256": "21f08ae40f9aa43f435863511f52e4ce2c4deafe6f7cb860fa89a84445fb502e"
+      },
+      "2026-09-08": {
+        "n_files": 172,
+        "bytes": 2665326,
+        "day_sha256": "823acddc80ad4d0f0574d1c424b06b2327c533f0ee7822402dc124d29721c2a2"
+      },
+      "2026-09-09": {
+        "n_files": 172,
+        "bytes": 2689717,
+        "day_sha256": "54d71024bcbfda2b5e8c1cc7cf112fdb6a7230499d0a9ac3a654a602d8c5fd81"
+      },
+      "2026-09-10": {
+        "n_files": 172,
+        "bytes": 2685775,
+        "day_sha256": "e4cd613d56901d1d956987c7a31e049b91b65c7860a3c26cb1a1016aca4432ce"
+      },
+      "2026-09-11": {
+        "n_files": 172,
+        "bytes": 2715360,
+        "day_sha256": "1c7b2a99f38e633777cf3f8b30be209eacf0f079098609eee8c0c7476f5f215e"
+      }
+    },
+    "not_consumed_note": "data/vix/, data/external/ and data/candles/ were NOT read by strategy_test_framework.py and are deliberately excluded from this fingerprint."
+  },
+  "feature_cache": {
+    "path": "data/derived/exp032_panel.parquet",
+    "present": true,
+    "sha256": "ca31484475cdb699b6d3ef54798c015465f1e7c7f9eb34be95144efb6c57ea23",
+    "bytes": 829117,
+    "n_rows": 9893,
+    "n_days": 59,
+    "columns": [
+      "date",
+      "ts",
+      "tod",
+      "expiry",
+      "dte_cal",
+      "is_expiry_day",
+      "spot",
+      "atm_strike",
+      "atm_call_bid",
+      "atm_call_ask",
+      "atm_put_bid",
+      "atm_put_ask",
+      "atm_iv",
+      "pcr_oi",
+      "pcr_vol",
+      "max_pain",
+      "call_oi",
+      "put_oi",
+      "entry_strike",
+      "es_call_bid",
+      "es_call_ask",
+      "es_put_bid",
+      "es_put_ask",
+      "n_strikes"
+    ],
+    "rebuild_command": "python scripts/strategy_test_framework.py --rebuild-panel",
+    "note": "Derived artifact. Byte-level parquet output can vary with pyarrow version; the authoritative invariants are n_rows, n_days, columns and the source_data root_sha256."
+  },
+  "outputs": {
+    "summary_csv": {
+      "path": "reports/exp032_strategy_zoo_20260912T132132.csv",
+      "present": true,
+      "sha256": "32b6253ec297d0cd53374446aef52e0ac9c08e9c17e4146889314d3f57bb590b",
+      "bytes": 3146,
+      "n_rows": 7
+    },
+    "trades_csv": {
+      "path": "reports/exp032_trades_20260912T132132.csv",
+      "present": true,
+      "sha256": "e876f46b37dad24ff1930723ad0c49dc5c46879e96f2d044a8bd0b6e7bf5617e",
+      "bytes": 9653,
+      "n_rows": 129
+    },
+    "results_inline": [
+      {
+        "code": "S1",
+        "strategy": "VRP Harvesting v1.2",
+        "n": 28,
+        "mean": 0.0021830896,
+        "win": 71.4285714286,
+        "sharpe": 0.9844804162,
+        "max_dd": -12.3688573412,
+        "pf": 1.4088405181,
+        "worst": -0.1124780296,
+        "t": 0.5076400405,
+        "p": 0.3058529024,
+        "q_bh": 0.8607496942,
+        "fdr_reject": false,
+        "spa_p": 0.587,
+        "rc_p": 0.5424,
+        "cost_fragile": false,
+        "unstable": true,
+        "verdict": "INCONCLUSIVE - CONTINUE COLLECTING"
+      },
+      {
+        "code": "S2",
+        "strategy": "OI Concentration Divergence",
+        "n": 20,
+        "mean": -0.0003115305,
+        "win": 50.0,
+        "sharpe": -1.6502655615,
+        "max_dd": -0.9164454905,
+        "pf": 0.5895835895,
+        "worst": -0.0049259534,
+        "t": -0.5926508862,
+        "p": 0.7232925917,
+        "q_bh": 1.0,
+        "fdr_reject": false,
+        "spa_p": 0.587,
+        "rc_p": 0.5424,
+        "cost_fragile": false,
+        "unstable": false,
+        "verdict": "ARCHIVE"
+      },
+      {
+        "code": "S3",
+        "strategy": "IV Squeeze -> RV expansion",
+        "n": 13,
+        "mean": -0.0063289416,
+        "win": 7.6923076923,
+        "sharpe": -5.9713017304,
+        "max_dd": -7.940564063,
+        "pf": 0.0498408569,
+        "worst": -0.0166916601,
+        "t": -7.9146133228,
+        "p": 1.0,
+        "q_bh": 1.0,
+        "fdr_reject": false,
+        "spa_p": 0.587,
+        "rc_p": 0.5424,
+        "cost_fragile": false,
+        "unstable": false,
+        "verdict": "REJECT"
+      },
+      {
+        "code": "S4",
+        "strategy": "PCR Extreme Reversal",
+        "n": 29,
+        "mean": -0.0001413557,
+        "win": 55.1724137931,
+        "sharpe": -0.508775453,
+        "max_dd": -1.6571837476,
+        "pf": 0.8910735375,
+        "worst": -0.0081798327,
+        "t": -0.2672851784,
+        "p": 0.6053752012,
+        "q_bh": 1.0,
+        "fdr_reject": false,
+        "spa_p": 0.587,
+        "rc_p": 0.5424,
+        "cost_fragile": false,
+        "unstable": true,
+        "verdict": "ARCHIVE"
+      },
+      {
+        "code": "S5",
+        "strategy": "Max Pain Magnet (traded leg)",
+        "n": 11,
+        "mean": 0.0028194528,
+        "win": 72.7272727273,
+        "sharpe": 0.5363416123,
+        "max_dd": -9.562630899,
+        "pf": 1.2453500553,
+        "worst": -0.095626309,
+        "t": 0.3347874182,
+        "p": 0.3688927261,
+        "q_bh": 0.8607496942,
+        "fdr_reject": false,
+        "spa_p": 0.587,
+        "rc_p": 0.5424,
+        "cost_fragile": false,
+        "unstable": true,
+        "verdict": "INCONCLUSIVE - CONTINUE COLLECTING"
+      },
+      {
+        "code": "S6",
+        "strategy": "0-DTE Straddle Mispricing",
+        "n": 11,
+        "mean": 0.0028194528,
+        "win": 72.7272727273,
+        "sharpe": 0.5363416123,
+        "max_dd": -9.562630899,
+        "pf": 1.2453500553,
+        "worst": -0.095626309,
+        "t": 0.3347874182,
+        "p": 0.3688927261,
+        "q_bh": 0.8607496942,
+        "fdr_reject": false,
+        "spa_p": 0.587,
+        "rc_p": 0.5424,
+        "cost_fragile": false,
+        "unstable": true,
+        "verdict": "INCONCLUSIVE - CONTINUE COLLECTING"
+      },
+      {
+        "code": "S7",
+        "strategy": "Overnight Gap Fade",
+        "n": 17,
+        "mean": -0.0011966654,
+        "win": 23.5294117647,
+        "sharpe": -4.4766214804,
+        "max_dd": -2.1346128056,
+        "pf": 0.2259801863,
+        "worst": -0.0059908227,
+        "t": -3.104673233,
+        "p": 0.9990475533,
+        "q_bh": 1.0,
+        "fdr_reject": false,
+        "spa_p": 0.587,
+        "rc_p": 0.5424,
+        "cost_fragile": false,
+        "unstable": false,
+        "verdict": "REJECT"
+      }
+    ]
+  },
+  "source_files_sha256": {
+    "_hash_method": "sha256 of content with CRLF/CR normalised to LF",
+    "scripts/strategy_test_framework.py": "4c32575ca55843fec7bdaa9efe0242a97c5294e344f3e9f8eff1c0a7b6ca8b7b",
+    "scripts/exp032_freeze.py": "6cbaaf623a2ee6789a2effde3073f4f3cbc11fb8b76431bb8f1db983cda2ab62",
+    "docs/preregistrations/exp032_strategy_zoo.md": "b3deff1d42bab8f9d78e8204894490815c7c02a3b5f11bf092af045f5f8e1a34",
+    "nifty_quant/analytics/data_snooping.py": "139aea4dbedb573f31245de125d21096b972144def1f8d708912ad39c7346f00",
+    "nifty_quant/analytics/black_scholes.py": "de108c4f90186cafbf082cf37429dbaf4aa7557bfbe1e5c17633e893f1299a06",
+    "nifty_quant/analytics/options.py": "8e9109bd6a32485f446f11a481e7ffe7073fc6c7f16c56fb14236176160478ae",
+    "nifty_quant/research/live_lens.py": "2c7bbe7c026450df3942adbf4d705ec8a789db4f57527b3a7597c48af818bf7f",
+    "nifty_quant/research/derive_iv.py": "f54061d7caa798c87e65dfb1fbe87b92f4b7883625826605fa9107e32ac4e6a0",
+    "nifty_quant/data/storage/parquet.py": "68d7fb5cf22bb6ed84457cfbd07d3510323bfd87d9baf4d520a8a7fe7aeee8a8"
+  }
+}
