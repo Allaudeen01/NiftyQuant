@@ -124,6 +124,9 @@ def main() -> int:
               f"~MDE(dR2)={mde_ic**2:.5f}")
 
     res = pd.DataFrame(rows)
+    # machine-readable copy so the walk-forward can apply the locked
+    # "estimate below the MDE" clause of the inconclusive band
+    res.to_csv(OUT.parent / "power_addendum_values.csv", index=False)
 
     lines = [
         "# EXP034 -- Locked Power Addendum (Minimum Detectable Effect)",
