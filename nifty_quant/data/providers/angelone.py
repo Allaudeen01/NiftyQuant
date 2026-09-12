@@ -335,6 +335,142 @@ class AngelOneProvider(BrokerProvider):
             fetched.extend(data.get("fetched", []) or [])
         return fetched
 
+    # --- dgp-v2 additions -------------------------------------------------
+    # These are NEW methods rather than changes to the ones above, so every
+    # existing dgp-v1 caller keeps its exact behaviour and byte-identical
+    # semantics. See nifty_quant/data/dgp.py for the versioning contract.
+
+    def _fetch_market_data_timed(
+        self, tokens: list[str], *, batch_size: int = 50,
+        failed_batches: list[int] | None = None,
+    ) -> tuple[list[dict], dict[str, dict]]:
+        """Batched fetch that records WHEN each batch actually returned.
+
+        Returns ``(items, timing_by_token)`` where timing carries
+        ``batch_index`` and ``observed_mono`` (a ``time.monotonic()`` reading,
+        converted to wall-clock by the caller against a single per-poll anchor
+        so an NTP step cannot make observations appear to move backwards).
+
+        ``failed_batches`` is appended to rather than raised on, so one bad
+        batch no longer discards the successful ones. Under dgp-v1 a single
+        failing batch propagated out of the whole chain fetch and every batch
+        was refetched after a 4-12s backoff, silently widening the gap between
+        the recorded timestamp and the actual observation.
+        """
+        items: list[dict] = []
+        timing: dict[str, dict] = {}
+        for bi, i in enumerate(range(0, len(tokens), batch_size)):
+            batch = tokens[i:i + batch_size]
+            try:
+                self._throttle()
+                resp = self._client.getMarketData("FULL", {"NFO": batch})
+            except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
+                _log.event("batch_fetch_failed", level=40, batch_index=bi,
+                           n_tokens=len(batch), error=str(exc)[:120])
+                if failed_batches is not None:
+                    failed_batches.append(bi)
+                continue
+            observed_mono = time.monotonic()
+            data = (resp or {}).get("data", {}) if isinstance(resp, dict) else {}
+            got = data.get("fetched", []) or []
+            items.extend(got)
+            for it in got:
+                tok = str(it.get("symbolToken") or it.get("token") or "")
+                timing[tok] = {"batch_index": bi, "observed_mono": observed_mono}
+        return items, timing
+
+    def get_option_chain_timed(
+        self, underlying: str, expiry: date, *,
+        strike_band: tuple[float, float] | None = None,
+        shuffle_seed: int | None = None,
+        fetch_attempt: int = 0,
+    ) -> tuple[list[OptionQuote], dict]:
+        """dgp-v2 chain fetch: per-contract timing, pre-filtered band, shuffled order.
+
+        Returns ``(quotes, meta)``. Every quote carries ``observed_ts`` as a
+        monotonic reading (converted by the caller), plus ``batch_index``,
+        ``fetch_rank``, ``token`` and ``trading_symbol``.
+
+        Crucially this does NOT call ``get_spot()`` -- the caller observes spot
+        before and after the whole poll. Under dgp-v1 spot was read last,
+        inside this call, behind a cache, which made near-expiry quotes older
+        than spot but far-expiry quotes NEWER than spot (the unsafe direction)
+        and forced EXP034 to restrict itself to the near expiry.
+        """
+        master = self._get_instrument_master()
+        instruments = master.option_instruments(
+            underlying, expiry, strike_band=strike_band, shuffle_seed=shuffle_seed)
+        if not instruments:
+            raise RuntimeError(
+                f"no {underlying} OPTIDX contracts for expiry {expiry.isoformat()} "
+                f"within band {strike_band} in the scrip master.")
+
+        by_token = {ins.token: ins for ins in instruments}
+        rank_by_token = {ins.token: r for r, ins in enumerate(instruments)}
+        failed: list[int] = []
+        fetched, timing = self._fetch_market_data_timed(
+            [ins.token for ins in instruments], failed_batches=failed)
+
+        quotes: list[OptionQuote] = []
+        for item in fetched:
+            token = str(item.get("symbolToken") or item.get("token") or "")
+            ins = by_token.get(token)
+            if ins is None:
+                continue
+            bid, ask = _best_bid_ask(item)
+            t = timing.get(token, {})
+            quotes.append(OptionQuote(
+                strike=ins.strike,
+                option_type=ins.option_type,
+                expiry=expiry,
+                last_price=float(item.get("ltp", 0.0) or 0.0),
+                bid=bid,
+                ask=ask,
+                volume=float(item.get("tradeVolume", 0.0) or 0.0),
+                open_interest=float(item.get("opnInterest", 0.0) or 0.0),
+                implied_volatility=None,
+                observed_ts=t.get("observed_mono"),
+                batch_index=t.get("batch_index"),
+                fetch_rank=rank_by_token.get(token),
+                fetch_attempt=fetch_attempt,
+                token=token,
+                trading_symbol=ins.trading_symbol,
+            ))
+        meta = {
+            "n_instruments": len(instruments),
+            "n_quotes": len(quotes),
+            "failed_batches": failed,
+            "n_batches": (len(instruments) + 49) // 50,
+            "shuffle_seed": shuffle_seed,
+            "strike_band": strike_band,
+        }
+        return quotes, meta
+
+    def get_spot_observed(self, symbol: str) -> tuple[float | None, float, str]:
+        """Spot with its observation time and provenance.
+
+        Returns ``(value, observed_mono, source)``. ``source`` is
+        ``live_ltp``, ``daily_close_fallback`` or ``unavailable``.
+
+        dgp-v1's ``get_spot()`` returned a bare float and fell back silently to
+        the last daily close when the live LTP call failed -- which pinned spot
+        to a constant for the whole of 2026-06-26 and was not discovered until
+        an audit three experiments later. Here the fallback is reported, never
+        silent. The 30s cache is deliberately bypassed so that a pre-fetch and
+        post-fetch reading are genuinely independent observations.
+        """
+        spot = self._live_index_ltp(symbol)
+        if spot is not None and spot > 0:
+            return float(spot), time.monotonic(), "live_ltp"
+        try:
+            end = datetime.now().date()
+            series = self.get_ohlcv(symbol, "1d", end - timedelta(days=7), end)
+            if series.candles:
+                return float(series.candles[-1].close), time.monotonic(), "daily_close_fallback"
+        except Exception as exc:  # noqa: BLE001
+            _log.event("spot_fallback_failed", level=40, error=str(exc)[:120])
+        return None, time.monotonic(), "unavailable"
+
     # --- execution (gated) --------------------------------------------------
 
     def place_order(self, order: OrderRequest) -> OrderResult:

@@ -131,6 +131,17 @@ def parse_args() -> argparse.Namespace:
                    help="Seconds between underlying API requests (raise to avoid "
                         "Angel rate-limit errors).")
     p.add_argument("--data-dir", default="data")
+    p.add_argument("--dgp-v2", dest="dgp_v2", action="store_true",
+                   help="Collect under dgp-v2: per-contract observation "
+                        "timestamps, pre-filtered strike band, randomized fetch "
+                        "order, spot observed before AND after the chain fetch, "
+                        "explicit poll ids and collection-time certification. "
+                        "Writes to data/option_chain_v2/ -- NEVER the v1 root. "
+                        "DEFAULT OFF: v2 days do NOT count toward EXP034-C's "
+                        "100 usable dgp-v1 days.")
+    p.add_argument("--no-shuffle", dest="shuffle", action="store_false",
+                   help="dgp-v2 only: keep strike-ascending fetch order instead "
+                        "of randomizing. Only for A/B validating the skew fix.")
     p.add_argument("--test", "--sandbox", dest="test", action="store_true",
                    help="Sandbox mode: write to data_test/ (never the production "
                         "data/ warehouse).")
@@ -487,8 +498,17 @@ def main() -> int:
             dt = now_ist()
             if args.ignore_market_hours or in_session(dt):
                 try:
-                    poll_once(provider, args.data_dir, args.underlying,
-                              expiries, args.strike_band_pct, monitor=args.monitor)
+                    if args.dgp_v2:
+                        from nifty_quant.data.collect_v2 import poll_once_v2
+                        res = poll_once_v2(provider, args.data_dir, args.underlying,
+                                           expiries, args.strike_band_pct,
+                                           shuffle=args.shuffle)
+                        print(f"[{dt:%H:%M:%S}] dgp-v2 {res['poll_status']} "
+                              f"rows={res['rows']} spot={res['spot_source']} "
+                              f"-> {getattr(res['path'], 'name', None)}")
+                    else:
+                        poll_once(provider, args.data_dir, args.underlying,
+                                  expiries, args.strike_band_pct, monitor=args.monitor)
                 except Exception as exc:  # noqa: BLE001 - one bad poll must not end the day
                     _log.event("poll_failed", level=40, error=str(exc))
                     print(f"[{dt:%H:%M:%S}] poll error (continuing): {exc}")

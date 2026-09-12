@@ -18,6 +18,7 @@ the CE/PE suffix of the trading symbol.
 from __future__ import annotations
 
 import json
+import random
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -99,8 +100,28 @@ class InstrumentMaster:
         *,
         exch_seg: str = "NFO",
         instrumenttype: str = "OPTIDX",
+        strike_band: tuple[float, float] | None = None,
+        shuffle_seed: int | None = None,
     ) -> list[OptionInstrument]:
-        """All CE/PE option contracts for an underlying and expiry."""
+        """All CE/PE option contracts for an underlying and expiry.
+
+        ``strike_band`` (dgp-v2): inclusive ``(lo, hi)`` filter applied BEFORE
+        tokenizing. dgp-v1 fetched the entire ladder and discarded out-of-band
+        strikes afterwards, roughly doubling the contracts fetched and adding
+        1-2 unnecessary request batches -- and therefore 1-2 extra pauses of
+        within-poll timing skew.
+
+        ``shuffle_seed`` (dgp-v2): when given, the returned order is a seeded
+        permutation instead of strike-ascending. Under dgp-v1 the terminal
+        ``sorted(..., key=(strike, option_type))`` combined with fixed-size
+        request batching made the observation-time skew **monotonic in
+        strike** -- a systematic, direction-carrying bias aligned exactly with
+        the axis a strike-localized study measures along. Shuffling converts
+        that structured bias into noise. It changes neither the number of API
+        calls nor their spacing, so it is rate-limit neutral.
+
+        Defaults preserve dgp-v1 behaviour exactly.
+        """
         name = name.upper()
         out: list[OptionInstrument] = []
         for rec in self._ensure_loaded():
@@ -117,14 +138,26 @@ class InstrumentMaster:
             otype = _option_type_from_symbol(symbol)
             if otype is None:
                 continue
+            strike_rupees = float(rec["strike"]) / 100.0  # paise -> rupees
+            if strike_band is not None and not (
+                strike_band[0] <= strike_rupees <= strike_band[1]
+            ):
+                continue
             out.append(OptionInstrument(
                 token=str(rec["token"]),
                 trading_symbol=symbol,
-                strike=float(rec["strike"]) / 100.0,  # paise -> rupees
+                strike=strike_rupees,
                 option_type=otype,
                 expiry=expiry,
             ))
-        return sorted(out, key=lambda o: (o.strike, o.option_type.value))
+        ordered = sorted(out, key=lambda o: (o.strike, o.option_type.value))
+        if shuffle_seed is None:
+            return ordered
+        # Seeded so the realized order is exactly reproducible from the seed
+        # recorded alongside the data.
+        rng = random.Random(shuffle_seed)
+        rng.shuffle(ordered)
+        return ordered
 
     def available_expiries(
         self, name: str, *, exch_seg: str = "NFO", instrumenttype: str = "OPTIDX"

@@ -39,9 +39,13 @@ SKEW_WARN_S = 2.5
 SKEW_CRIT_S = 4.0
 
 
-def available_days(data_dir: str = "data") -> list[date]:
+V1_ROOT = "option_chain"
+V2_ROOT = "option_chain_v2"
+
+
+def available_days(data_dir: str = "data", root: str = V1_ROOT) -> list[date]:
     out = []
-    for p in sorted(glob.glob(os.path.join(data_dir, "option_chain", "*", "*", "*"))):
+    for p in sorted(glob.glob(os.path.join(data_dir, root, "*", "*", "*"))):
         if os.path.isdir(p):
             y, m, d = p.replace("\\", "/").split("/")[-3:]
             try:
@@ -51,15 +55,33 @@ def available_days(data_dir: str = "data") -> list[date]:
     return sorted(out)
 
 
-def load_day(d: date, data_dir: str = "data") -> pd.DataFrame:
-    folder = os.path.join(data_dir, "option_chain", f"{d.year:04d}",
+def available_roots(data_dir: str = "data") -> dict[str, int]:
+    """Which data-generating processes have data on disk.
+
+    v1 and v2 are NEVER merged here. They are different processes and mixing
+    them in one view would be the same error the storage separation exists to
+    prevent.
+    """
+    return {r: len(available_days(data_dir, r))
+            for r in (V1_ROOT, V2_ROOT)
+            if os.path.isdir(os.path.join(data_dir, r))}
+
+
+def load_day(d: date, data_dir: str = "data", root: str = V1_ROOT) -> pd.DataFrame:
+    folder = os.path.join(data_dir, root, f"{d.year:04d}",
                           f"{d.month:02d}", f"{d.day:02d}")
     files = sorted(glob.glob(os.path.join(folder, "*.parquet")))
     if not files:
         return pd.DataFrame()
     df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    # dgp-v2 has no `snapshot_ts`; its poll anchor is `poll_started_ts` and its
+    # real observation times are per-contract in `observed_ts`.
+    if "snapshot_ts" not in df.columns and "poll_started_ts" in df.columns:
+        df["snapshot_ts"] = pd.to_datetime(df["poll_started_ts"])
     df["snapshot_ts"] = pd.to_datetime(df["snapshot_ts"])
     df["expiry"] = pd.to_datetime(df["expiry"])
+    if "observed_ts" in df.columns:
+        df["observed_ts"] = pd.to_datetime(df["observed_ts"])
     return df
 
 

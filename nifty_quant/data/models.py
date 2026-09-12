@@ -85,7 +85,13 @@ class OHLCVSeries:
 
 @dataclass(frozen=True)
 class OptionQuote:
-    """A single option contract snapshot from the chain."""
+    """A single option contract snapshot from the chain.
+
+    Fields below `implied_volatility` are dgp-v2 collection metadata. They all
+    default to ``None`` so that every existing dgp-v1 construction site --
+    including frozen consumers such as ``research/live_lens.py`` -- keeps
+    working unchanged.
+    """
 
     strike: float
     option_type: OptionType
@@ -97,6 +103,16 @@ class OptionQuote:
     open_interest: float = 0.0
     oi_change: float = 0.0
     implied_volatility: float | None = None  # as a fraction, e.g. 0.13 = 13%
+
+    # --- dgp-v2 collection metadata (None under dgp-v1) --------------------
+    observed_ts: datetime | None = None
+    """Wall-clock instant this contract's batch actually returned. Under
+    dgp-v1 no such time exists: every row shared one poll-level timestamp."""
+    batch_index: int | None = None
+    fetch_rank: int | None = None
+    fetch_attempt: int | None = None
+    token: str | None = None
+    trading_symbol: str | None = None
 
     @property
     def mid(self) -> float:
@@ -119,6 +135,25 @@ class OptionChain:
     """Synchronized market context captured at the same instant, e.g.
     ``{"india_vix": 13.2, "usdinr": 83.1}``. Kept generic so new context
     fields can be added without changing the schema."""
+
+    # --- dgp-v2 poll metadata (None/default under dgp-v1) -----------------
+    dgp_version: int = 1
+    poll_id: str | None = None
+    expiry_rank: int | None = None
+    """0 = near expiry. Recorded at collection time rather than inferred
+    downstream as ``min(expiry)``, which is fragile on expiry day."""
+    poll_started_ts: datetime | None = None
+    spot_pre: float | None = None
+    spot_pre_ts: datetime | None = None
+    spot_post: float | None = None
+    spot_post_ts: datetime | None = None
+    spot_source: str | None = None
+    """``live_ltp`` or ``daily_close_fallback``. Under dgp-v1 a session-long
+    LTP failure silently pinned spot to a constant (2026-06-26) and was only
+    discovered by audit three experiments later."""
+    poll_status: str | None = None
+    expiries_intended: tuple = ()
+    order_seed: int | None = None
 
     def calls(self) -> list[OptionQuote]:
         return sorted(
