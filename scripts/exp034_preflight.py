@@ -193,12 +193,56 @@ def check_panel(gate: Gate, panel_path: Path) -> None:
                    f"{silent} silently dropped rows")
 
 
+def check_feature_panel(gate: Gate, cfg: dict, path: Path) -> None:
+    """Validate the REALIZED model matrices, not just the declared column lists."""
+    import numpy as np
+    import pandas as pd
+
+    df = pd.read_parquet(path)
+    reg = cfg["feature_registry"]
+    chain = [f["feature_name"] for f in reg["features"]]
+    mm = cfg["model_matrices"]
+    m1 = list(mm["MODEL_1_column_list"])
+    m2 = m1 + list(mm["MODEL_2_added_columns"])
+    m3 = m2 + chain + ["iv_available"]
+
+    for name, cols, expected in (("MODEL_1", m1, mm["MODEL_1_columns"]),
+                                  ("MODEL_2", m2, mm["MODEL_2_columns"]),
+                                  ("MODEL_3", m3, mm["MODEL_3_columns"])):
+        present = [c for c in cols if c in df.columns]
+        gate.check(f"realized {name} has all {expected} locked columns",
+                   len(present) == expected == len(cols),
+                   f"present {len(present)} of {len(cols)}, locked {expected}; "
+                   f"missing={[c for c in cols if c not in df.columns][:6]}")
+
+    gate.check("realized nesting MODEL_1 subset MODEL_2 subset MODEL_3",
+               set(m1).issubset(set(m2)) and set(m2).issubset(set(m3)))
+    gate.check("all 15 locked chain features present as columns",
+               all(c in df.columns for c in chain),
+               f"missing={[c for c in chain if c not in df.columns]}")
+
+    num = df[[c for c in m3 if c in df.columns]].apply(pd.to_numeric, errors="coerce")
+    gate.check("no infinite values in the MODEL_3 matrix",
+               int(np.isinf(num.to_numpy()).sum()) == 0)
+    degenerate = [c for c in num.columns if num[c].nunique(dropna=True) <= 1]
+    gate.check("no constant/degenerate columns in the MODEL_3 matrix",
+               not degenerate, f"degenerate={degenerate}")
+
+    if {"prediction_start_timestamp", "feature_timestamp"}.issubset(df.columns):
+        ok = int((pd.to_datetime(df["prediction_start_timestamp"])
+                  > pd.to_datetime(df["feature_timestamp"])).sum())
+        gate.check("timing invariant survives the feature join",
+                   ok == len(df), f"{len(df) - ok} violating rows")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="EXP034 preflight consistency gate.")
     ap.add_argument("--config", default=CONFIG_PATH,
                     help="config to validate (default: the locked path)")
     ap.add_argument("--panel", default=None,
                     help="optional built observation panel to validate")
+    ap.add_argument("--features", default=None,
+                    help="optional built feature panel; validates REALIZED matrices")
     args = ap.parse_args()
 
     config_path = Path(args.config)
@@ -224,12 +268,20 @@ def main() -> int:
     check_hypotheses(gate, cfg)
 
     if args.panel:
-        print("\n--- built panel ---")
+        print("\n--- built observation panel ---")
         p = Path(args.panel)
         if not p.exists():
             gate.check("panel exists", False, str(p))
         else:
             check_panel(gate, p)
+
+    if args.features:
+        print("\n--- built feature panel (realized matrices) ---")
+        fp = Path(args.features)
+        if not fp.exists():
+            gate.check("feature panel exists", False, str(fp))
+        else:
+            check_feature_panel(gate, cfg, fp)
 
     print("\n" + "=" * 78)
     if gate.failures:
