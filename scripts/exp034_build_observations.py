@@ -54,6 +54,30 @@ SNAP_COLUMNS = [
 
 SESSION_CLOSE = "15:29"
 
+# --- pre-committed sensitivity diagnostics (declared BEFORE any feature,
+# --- target or model exists; see docs/exp034_errata.md, Erratum 2).
+# These are METADATA ONLY: they never change which rows are retained, never
+# alter the locked primary analysis, and per the same rule that governs the
+# no-gap variant they may only ever INVALIDATE a positive finding, never
+# create or rescue one.
+#
+# SHORT_GAP_SECONDS: intra-poll timing slop is ~2-5s (quotes fetched before
+# spot). At a t->t+1 separation of a few seconds, spot_t and spot_{t+1} are
+# effectively the same observation, so shared microstructure noise inflates a
+# price feature while deflating the label denominator -- inducing spurious
+# reversal correlation. Noise decorrelates within seconds, so 30s is a ~6-10x
+# margin over the slop and is comfortably below the ~132s normal cadence.
+SHORT_GAP_SECONDS = 30.0
+# DOUBLE_CADENCE_DAY_MEDIAN_SECONDS: a day whose MEDIAN gap is far below the
+# nominal 120s poll interval ran at double cadence, so a horizon of h
+# snapshots spans roughly half its nominal clock time on that day. Measured on
+# the near-expiry stream, exactly one day qualifies: 2026-08-25 at 62.0s,
+# against a next-lowest day of 131.2s. Any threshold in roughly [65s, 130s]
+# selects the identical single day. (2026-06-22, flagged double-cadence in
+# EXP033's audit of the raw both-expiry file set, is normal here at 136.4s --
+# that artifact never reaches EXP034's analysis universe.)
+DOUBLE_CADENCE_DAY_MEDIAN_SECONDS = 100.0
+
 
 def _norm_sha256(path: Path) -> str | None:
     if not path.exists():
@@ -230,6 +254,11 @@ def build_pairing(near: pd.DataFrame, d: date, horizons: list[int],
         gaps[1:] = pd.Series(snaps).diff().dt.total_seconds().to_numpy()[1:]
 
     close_cut = pd.Timestamp(f"{d.isoformat()} {SESSION_CLOSE}")
+    day_median_gap = float(np.nanmedian(gaps[1:])) if n > 1 else np.nan
+    double_cadence = bool(day_median_gap < DOUBLE_CADENCE_DAY_MEDIAN_SECONDS) \
+        if np.isfinite(day_median_gap) else False
+    meta = {"day_median_gap_seconds": day_median_gap,
+            "double_cadence_day_flag": double_cadence}
     rows = []
     for h in horizons:
         for i in range(n):
@@ -243,6 +272,7 @@ def build_pairing(near: pd.DataFrame, d: date, horizons: list[int],
                                  prediction_end_timestamp=pd.NaT,
                                  elapsed_seconds_t_to_t1=np.nan,
                                  label_window_max_gap_seconds=np.nan,
+                                 short_gap_flag=False, **meta,
                                  retained=False, exclusion_reason="no_next_snapshot"))
                 continue
             elapsed = float(gaps[j])
@@ -253,6 +283,7 @@ def build_pairing(near: pd.DataFrame, d: date, horizons: list[int],
                                  prediction_end_timestamp=pd.NaT,
                                  elapsed_seconds_t_to_t1=elapsed,
                                  label_window_max_gap_seconds=np.nan,
+                                 short_gap_flag=bool(elapsed < SHORT_GAP_SECONDS), **meta,
                                  retained=False,
                                  exclusion_reason="label_window_exceeds_session_close"))
                 continue
@@ -272,6 +303,7 @@ def build_pairing(near: pd.DataFrame, d: date, horizons: list[int],
                              prediction_end_timestamp=snaps[k],
                              elapsed_seconds_t_to_t1=elapsed,
                              label_window_max_gap_seconds=win_max_gap,
+                             short_gap_flag=bool(elapsed < SHORT_GAP_SECONDS), **meta,
                              retained=(reason == ""), exclusion_reason=reason))
     return pd.DataFrame(rows)
 
