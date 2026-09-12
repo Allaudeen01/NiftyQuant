@@ -1,0 +1,349 @@
+{
+  "experiment_id": "exp034",
+  "title": "Option Chain Information Content Study",
+  "preregistration": "docs/preregistrations/exp034_option_information_content.md",
+  "status": "DRAFT REV-2 -- not locked until committed",
+  "config_version": "exp034-config-v1.1",
+  "drafted_at": "2026-09-12",
+
+  "experiment_naming": {
+    "EXP034-A": "58-usable-day exploratory run defined by this preregistration",
+    "EXP034-C": "forward-only confirmatory replication, same locked pipeline",
+    "unsuffixed_exp034": "the preregistration and codebase shared by both",
+    "max_verdict_from_A_alone": "EXPLORATORY_EVIDENCE -- authorizes only running EXP034-C"
+  },
+
+  "boundary": {
+    "frozen_predecessor": "EXP033_FINAL_FROZEN",
+    "freeze_commit": "123f345",
+    "experiment_commit": "5a1d3ba",
+    "rule": "EXP034 never modifies, reruns, regenerates or overwrites any EXP033 artifact. Writes only to data/derived/exp034_*, reports/exp034/, docs/preregistrations/exp034_*. Builds its own panel from raw data/option_chain."
+  },
+
+  "inherited_defect_disclosed": {
+    "field": "volume",
+    "verified_semantics": "cumulative daily traded volume -- strictly monotonic non-decreasing across all 172 snapshots of 2026-09-11 for the ATM call; zero negative first differences (open_interest by contrast shows 73 negative differences, correctly a level)",
+    "exp033_defect": "EXP033 E1 volume-spike family z-scored the raw cumulative level while its docstring described a 2-min increment; that statistic is dominated by intraday drift and largely measured 'cumulative volume has grown since the open'",
+    "exp033_action": "NOT corrected -- EXP033 is frozen and must not be touched",
+    "exp034_action": "all volume features defined on the FIRST DIFFERENCE of cumulative volume (F01-F03)"
+  },
+
+  "sample_reuse": {
+    "decision": "A_exploratory_now_confirm_on_forward_data",
+    "status_of_full_sample_run": "EXPLORATORY_BY_CONSTRUCTION",
+    "rationale": "third experiment against the same 59 days (exp032, exp033, exp034-A); no within-experiment correction can undo program-level snooping",
+    "permitted_conclusion_labels": [
+      "EXPLORATORY EVIDENCE OF INCREMENTAL INFORMATION",
+      "NO EXPLORATORY EVIDENCE OF INCREMENTAL INFORMATION",
+      "INCONCLUSIVE - UNDERPOWERED"
+    ],
+    "prohibited_vocabulary_for_A": ["proves", "confirms", "validates", "establishes", "tradable"],
+    "confirmatory_replication": {
+      "experiment_id": "exp034-C",
+      "trigger_total_usable_days": 100,
+      "usable_definition": "a day passing the identical per-day data-quality screen defined in data.per_day_quality_screen -- no other definition",
+      "scope": "forward days only (collected after 2026-09-11), pipeline byte-identical to the EXP034 freeze manifest",
+      "run_once": true,
+      "no_early_partial_run": true,
+      "no_feature_or_model_changes": true,
+      "precedent": "exp032 freeze policy: re-running locked rules on new data is a separate out-of-sample experiment"
+    },
+    "rejected_alternatives": {
+      "B_lockbox_12_days": "too small to confirm anything; spends irreplaceable data on a powerless test",
+      "C_proceed_unacknowledged": "contradicts the discipline that downgraded exp012 after SPA"
+    }
+  },
+
+  "data_version_compatibility": {
+    "current_version": "dgp-v1",
+    "changelog_file": "docs/data_versions.md",
+    "dgp_v1_semantics": {
+      "snapshot_schema": "_SNAP_COLUMNS as stored by collect_market_data.py::write_snapshot",
+      "timestamp_semantics": "one ts stamped BEFORE any network call; all rows of a poll share it",
+      "quote_to_spot_ordering": "quotes fetched first, get_spot() called last, 30s spot cache",
+      "near_expiry_selection": "minimum expiry present in the snapshot",
+      "spot_source_semantics": "live index LTP with daily-close fallback on LTP failure",
+      "vix_timing_semantics": "fetched BEFORE the chains, stamped with the same ts",
+      "option_field_definitions": "volume cumulative daily; open_interest a level; oi_change unpopulated; implied_volatility null",
+      "storage_format": "one parquet file per poll under YYYY/MM/DD/HH_MM.parquet"
+    },
+    "rule": "each forward-collected day must pass the per-day quality screen AND be certified dgp-v1 before inclusion in EXP034-C",
+    "invalidation_criteria": "a collector or provider change does not automatically disqualify forward data; but if it alters information timing, field meaning, or feature observability, affected days become dgp-v2 and CANNOT be pooled into EXP034-C -- they require a separately numbered experiment",
+    "decision_timing": "the compatibility decision for every forward day is made BEFORE any EXP034-C model output is inspected",
+    "stated_tradeoff": "the pre-stamped timestamp and the far-expiry quote-newer-than-spot ordering are arguably defects; repairing either starts dgp-v2 and resets the EXP034-C clock, since pre- and post-fix days cannot be pooled. Fixing the collector is therefore a deliberate decision to delay EXP034-C."
+  },
+
+  "data": {
+    "source": "data/option_chain/YYYY/MM/DD/HH_MM.parquet",
+    "expiry_scope": "near_expiry_only",
+    "n_collected_days": 59,
+    "n_usable_days": 58,
+    "excluded_trading_days": {
+      "2026-06-26": "spot constant (std=0) across all 127 snapshots; root cause = AngelOneProvider.get_spot() daily-close fallback when _live_index_ltp() returns None"
+    },
+    "per_day_quality_screen": {
+      "min_distinct_snapshots": 100,
+      "min_spot_std_points": 0.5,
+      "min_distinct_strikes": 20,
+      "min_atm_ce_pe_present_pct": 95,
+      "max_crossed_quotes_at_atm": 0,
+      "note": "applied identically in EXP034-A and EXP034-C"
+    },
+    "vix_join": "backward_asof_only",
+    "oi_change_column": "unusable (0 percent nonzero on every day); OI change derived by differencing open_interest per (strike, option_type)",
+    "iv": {
+      "source": "derived via analytics.black_scholes.implied_volatility",
+      "r_rate": 0.065,
+      "q_yield": 0.012,
+      "coverage_pct_approx": 79,
+      "restricted_to_levels": [-1, 0, 1],
+      "missingness": "not random (far OTM, illiquid)",
+      "handling": "train-fitted median imputation plus iv_available indicator; never silent full-sample imputation"
+    }
+  },
+
+  "intra_poll_timing": {
+    "verified_in": ["scripts/collect_market_data.py::poll_once", "nifty_quant/data/providers/angelone.py::get_option_chain"],
+    "mechanism": "one ts stamped before any network call; quotes fetched before spot; get_spot cached 30s; next expiry reuses the cached spot",
+    "near_expiry_quotes_vs_spot": "quotes older than spot -- safe, biases against finding chain value",
+    "next_expiry_quotes_vs_spot": "quotes newer than spot -- unsafe look-ahead channel",
+    "mitigations": ["near_expiry_only", "label window opens at t+1 (next valid snapshot)"]
+  },
+
+  "t_plus_1_definition": {
+    "rule": "t+1 is the NEXT CHRONOLOGICALLY AVAILABLE VALID near-expiry snapshot after t",
+    "not": "timestamp(t) + 2 minutes",
+    "missing_intervals": "if one or more expected polling intervals are missing, the next available valid snapshot is used",
+    "guarantee": "the feature snapshot at t is strictly in the past relative to the prediction window",
+    "required_audit_columns": [
+      "feature_timestamp",
+      "prediction_start_timestamp",
+      "prediction_end_timestamp",
+      "elapsed_seconds_t_to_t1"
+    ],
+    "max_elapsed_seconds_t_to_t1": 300,
+    "diagnostic_reporting": "distribution of elapsed_seconds_t_to_t1 reported per fold"
+  },
+
+  "targets": {
+    "decision_time": "t",
+    "label_base": "t+1 (next valid snapshot)",
+    "index_arithmetic_over": "valid snapshots, not clock time",
+    "within_day_only": true,
+    "primary": {
+      "T1a": {"kind": "signed_return", "horizon_snapshots": 1, "model_0": "zero_no_change"},
+      "T1b": {"kind": "signed_return", "horizon_snapshots": 5, "model_0": "zero_no_change"},
+      "T2a": {"kind": "absolute_return", "horizon_snapshots": 1, "model_0": "causal_rolling_mean_abs_return_by_tod_bucket"},
+      "T2b": {"kind": "absolute_return", "horizon_snapshots": 5, "model_0": "causal_rolling_mean_abs_return_by_tod_bucket"}
+    },
+    "n_primary_targets": 4,
+    "secondary": {
+      "T3a": {"kind": "above_normal_move_binary", "horizon_snapshots": 1, "model_0": "base_rate"},
+      "T3b": {"kind": "above_normal_move_binary", "horizon_snapshots": 5, "model_0": "base_rate"},
+      "note": "T3 is a coarsening of T2 and is deliberately excluded from the primary family"
+    },
+    "exclusions": [
+      "label window crossing 15:29 -> observation dropped, never truncated",
+      "no overnight windows",
+      "elapsed_seconds_t_to_t1 > 300 -> dropped",
+      "label window containing any gap > 300 s -> dropped"
+    ]
+  },
+
+  "model_matrices": {
+    "MODEL_1_columns": 30,
+    "MODEL_2_columns": 35,
+    "MODEL_3_columns": 51,
+    "nesting_required": "MODEL_1 subset of MODEL_2 subset of MODEL_3 -- Clark-West validity depends on it",
+    "MODEL_1_column_list": [
+      "ret_1", "ret_2", "ret_5", "ret_10",
+      "rv_intraday_expanding", "rv_20",
+      "twap_dist_pct", "dist_from_high_pct", "dist_from_low_pct",
+      "or_state", "or_forming_flag",
+      "tod_bucket_dummy_02", "tod_bucket_dummy_03", "tod_bucket_dummy_04",
+      "tod_bucket_dummy_05", "tod_bucket_dummy_06", "tod_bucket_dummy_07",
+      "tod_bucket_dummy_08", "tod_bucket_dummy_09", "tod_bucket_dummy_10",
+      "tod_bucket_dummy_11", "tod_bucket_dummy_12", "tod_bucket_dummy_13",
+      "dow_tue", "dow_wed", "dow_thu", "dow_fri",
+      "dte_cal", "is_expiry_day", "atm_rolled"
+    ],
+    "tod_buckets": {"n_buckets": 13, "minutes": 30, "span": "09:15-15:29", "reference_bucket": "01"},
+    "dow_reference": "monday",
+    "MODEL_2_added_columns": ["vix", "vix_chg", "vix_mom", "vix_accel", "vix_pctile_causal"],
+    "MODEL_3_added_columns": ["F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F09", "F10", "F11", "F12", "F13", "F14", "F15", "iv_available"]
+  },
+
+  "estimator": {
+    "primary": "ridge (logistic ridge for secondary T3)",
+    "secondary": "lightgbm",
+    "lightgbm_rule": "robustness check only; can NEVER convert a primary ridge null into a positive finding; a ridge null may not trigger a nonlinear-model switch inside this experiment",
+    "alpha_grid": [0.1, 1, 10, 100, 1000],
+    "alpha_selection": "chronological inner split inside the training window only -- inner-train = first 80 percent of training days, inner-validation = last 20 percent; refit on the full training window at the selected alpha",
+    "alpha_prohibition": "the OOS test block is never used to select alpha and never influences any fitted parameter"
+  },
+
+  "preprocessing_discipline": {
+    "rule": "all preprocessing parameters are fit exclusively on the training portion of each walk-forward fold",
+    "covers": ["feature scaling", "centering", "variance estimation", "imputation statistics", "clipping thresholds", "any transformation requiring fitted parameters"],
+    "prohibited": ["global normalization", "global z-scores", "full-sample means", "full-sample standard deviations", "future-derived imputation statistics", "any statistic computed on validation, test, future or full-sample data"],
+    "per_fold_order": [
+      "1. fit preprocessing on training observations only",
+      "2. freeze all fitted preprocessing parameters",
+      "3. apply the frozen transformation to the corresponding OOS observations",
+      "4. fit the estimator using only transformed training data",
+      "5. generate predictions on transformed OOS data without refitting"
+    ]
+  },
+
+  "feature_registry": {
+    "n_chain_features": 15,
+    "n_auxiliary_indicators": 1,
+    "count_reconciliation_note": "REV-1 prose claimed 14 by bundling two distinct IV-skew quantities under one label while its JSON enumerated 15. Every entry was audited for duplication, derivation, or metadata status before locking: none is a duplicate and none is derived from another. F12 (same-strike put-call IV spread) and F13 (cross-strike smile slope) measure different things. The correct universe is 15.",
+    "notation": "dv_X(k,t) = max(0, vol_cum_X(k,t) - vol_cum_X(k,t-1)); doi_X(k,t) = oi_X(k,t) - oi_X(k,t-1); mid_X(k,t) = (bid+ask)/2 if both positive else last_price; k is the relative strike level; S(t) = ATM straddle mid",
+    "features": [
+      {"feature_id": "F01", "feature_name": "ce_pe_volume_imbalance_atm1", "exact_formula": "(sum_{k in -1,0,1} dv_CE(k,t) - sum dv_PE(k,t)) / (sum dv_CE + sum dv_PE + eps)", "input_fields": ["volume"], "lookback_snapshots": 1, "normalization": "self-normalizing ratio in [-1,1]", "missing_value_rule": "drop observation if t-1 absent", "ablation_group": "G1", "included_in_model_matrix": true},
+      {"feature_id": "F02", "feature_name": "volume_acceleration", "exact_formula": "TV(t) / (mean_{j=1..5} TV(t-j) + eps) - 1, TV(t) = sum_{k in -2..2} (dv_CE + dv_PE)", "input_fields": ["volume"], "lookback_snapshots": 6, "normalization": "self-normalizing ratio", "missing_value_rule": "drop observation if fewer than 6 prior snapshots that day", "ablation_group": "G1", "included_in_model_matrix": true},
+      {"feature_id": "F03", "feature_name": "volume_anomaly_tod", "exact_formula": "(TV(t) - mu_ToD) / (sigma_ToD + eps)", "input_fields": ["volume"], "lookback_snapshots": "prior days", "normalization": "mu,sigma over the same 30-min bucket on PRIOR DAYS ONLY, expanding, min 5 prior days", "missing_value_rule": "drop observation if fewer than 5 prior days available", "ablation_group": "G1", "included_in_model_matrix": true},
+      {"feature_id": "F04", "feature_name": "net_oi_change_imbalance_atm2", "exact_formula": "(sum_{k in -2..2} doi_CE(k,t) - sum doi_PE(k,t)) / (sum |doi_CE| + sum |doi_PE| + eps)", "input_fields": ["open_interest"], "lookback_snapshots": 1, "normalization": "self-normalizing ratio in [-1,1]", "missing_value_rule": "drop observation if t-1 absent", "ablation_group": "G2", "included_in_model_matrix": true},
+      {"feature_id": "F05", "feature_name": "oi_concentration_atm1", "exact_formula": "sum_{k in -1,0,1} (oi_CE + oi_PE) / sum_{all strikes} (oi_CE + oi_PE)", "input_fields": ["open_interest"], "lookback_snapshots": 0, "normalization": "ratio in [0,1]", "missing_value_rule": "drop observation if denominator is 0", "ablation_group": "G2", "included_in_model_matrix": true},
+      {"feature_id": "F06", "feature_name": "oi_migration", "exact_formula": "(S_star(t) - S_star(t-1)) / 50, S_star = strike maximizing oi_CE + oi_PE over all collected strikes", "input_fields": ["open_interest", "strike"], "lookback_snapshots": 1, "normalization": "strike steps", "missing_value_rule": "drop observation if t-1 absent", "ablation_group": "G2", "included_in_model_matrix": true},
+      {"feature_id": "F07", "feature_name": "pcr_oi_change", "exact_formula": "PCR(t) - PCR(t-1), PCR = sum_all oi_PE / sum_all oi_CE", "input_fields": ["open_interest"], "lookback_snapshots": 1, "normalization": "difference of a ratio", "missing_value_rule": "drop observation if t-1 absent or denominator is 0", "ablation_group": "G2", "included_in_model_matrix": true},
+      {"feature_id": "F08", "feature_name": "ce_pe_premium_momentum_diff", "exact_formula": "r_CE - r_PE, r_X = mid_X(0,t)/mid_X(0,t-1) - 1, FIXED-STRIKE: the strike that is ATM at t evaluated at both t and t-1", "input_fields": ["bid", "ask", "last_price"], "lookback_snapshots": 1, "normalization": "return difference", "missing_value_rule": "train-fitted median imputation if that strike is absent at t-1", "ablation_group": "G3", "included_in_model_matrix": true},
+      {"feature_id": "F09", "feature_name": "atm_straddle_return", "exact_formula": "S(t)/S(t-1) - 1, S(t) = mid_CE(0,t) + mid_PE(0,t), same fixed-strike rule", "input_fields": ["bid", "ask", "last_price"], "lookback_snapshots": 1, "normalization": "return", "missing_value_rule": "train-fitted median imputation if absent at t-1", "ablation_group": "G3", "included_in_model_matrix": true},
+      {"feature_id": "F10", "feature_name": "atm_iv", "exact_formula": "mean of iv_CE(0,t), iv_PE(0,t) over those that solve", "input_fields": ["derived_iv"], "lookback_snapshots": 0, "normalization": "vol points (fraction)", "missing_value_rule": "train-fitted median imputation; iv_available = 0", "ablation_group": "G4", "included_in_model_matrix": true},
+      {"feature_id": "F11", "feature_name": "atm_iv_change", "exact_formula": "atm_iv(t) - atm_iv(t-1), fixed-strike", "input_fields": ["derived_iv"], "lookback_snapshots": 1, "normalization": "difference", "missing_value_rule": "train-fitted median imputation; iv_available = 0", "ablation_group": "G4", "included_in_model_matrix": true},
+      {"feature_id": "F12", "feature_name": "iv_skew_ce_minus_pe", "exact_formula": "iv_CE(0,t) - iv_PE(0,t)", "input_fields": ["derived_iv"], "lookback_snapshots": 0, "normalization": "difference", "missing_value_rule": "train-fitted median imputation; iv_available = 0", "ablation_group": "G4", "included_in_model_matrix": true, "disclosed_weakness": "put-call parity implies this is small and partly an artifact of the fixed r=0.065/q=0.012 forward assumption; retained because removing a feature pre-result on a judgement call would still alter the preregistered universe"},
+      {"feature_id": "F13", "feature_name": "iv_skew_slope", "exact_formula": "(mean(iv_CE(+1,t), iv_PE(+1,t)) - mean(iv_CE(-1,t), iv_PE(-1,t))) / 2", "input_fields": ["derived_iv"], "lookback_snapshots": 0, "normalization": "vol points per strike step", "missing_value_rule": "train-fitted median imputation; iv_available = 0", "ablation_group": "G4", "included_in_model_matrix": true},
+      {"feature_id": "F14", "feature_name": "dist_to_max_call_oi_norm", "exact_formula": "(K_star_CE(t) - spot(t)) / (S(t) + eps), K_star_CE = max-oi_CE strike above spot", "input_fields": ["open_interest", "strike", "spot", "bid", "ask"], "lookback_snapshots": 0, "normalization": "normalized by ATM straddle implied move", "missing_value_rule": "drop observation if no strike above spot", "ablation_group": "G5", "included_in_model_matrix": true},
+      {"feature_id": "F15", "feature_name": "dist_to_max_put_oi_norm", "exact_formula": "(spot(t) - K_star_PE(t)) / (S(t) + eps), K_star_PE = max-oi_PE strike below spot", "input_fields": ["open_interest", "strike", "spot", "bid", "ask"], "lookback_snapshots": 0, "normalization": "normalized by ATM straddle implied move", "missing_value_rule": "drop observation if no strike below spot", "ablation_group": "G5", "included_in_model_matrix": true}
+    ],
+    "auxiliary_indicators": [
+      {"feature_id": "AUX01", "feature_name": "iv_available", "exact_formula": "1 if F10-F13 all solved at t else 0", "ablation_group": "G4", "included_in_model_matrix": true, "counts_toward_chain_feature_total": false}
+    ],
+    "ablation_groups": {
+      "G1": ["F01", "F02", "F03"],
+      "G2": ["F04", "F05", "F06", "F07"],
+      "G3": ["F08", "F09"],
+      "G4": ["F10", "F11", "F12", "F13"],
+      "G5": ["F14", "F15"]
+    },
+    "relative_strikes": [-2, -1, 0, 1, 2],
+    "absolute_strikes_forbidden": true
+  },
+
+  "walk_forward": {
+    "scheme": "expanding_window",
+    "fold_space": "trading_days",
+    "min_train_trading_days": 30,
+    "test_block_trading_days": 5,
+    "step_trading_days": 5,
+    "expected_folds_at_58_days": 6,
+    "expected_oos_trading_days": 28,
+    "purge": "drop training observations whose label window overlaps the test block",
+    "embargo_snapshots": "h (on top of the structural t+1 offset)",
+    "reporting": "per fold and per trading day, never pooled only",
+    "note": "generate_windows() is calendar-day based; exp033 established ~0.72 trading days per calendar day. exp034 does fold arithmetic in trading-day space directly."
+  },
+
+  "evaluation": {
+    "regression_metrics": ["oos_r2_vs_model_0", "rmse", "pearson_ic", "spearman_ic"],
+    "classification_metrics_secondary": ["log_loss", "brier", "reliability_by_decile", "roc_auc_secondary"],
+    "incremental_test": "clark_west_adjusted_mspe_one_sided",
+    "diebold_mariano": "NOT USED -- invalid for nested models under the null",
+    "primary_inference": "stationary block bootstrap over whole trading days (analytics.data_snooping.stationary_bootstrap_indices)",
+    "cross_check_inference": "HAC/Newey-West at lag >= h",
+    "robustness_checks": ["non_overlapping_sampling_every_h", "no_gap_timing_variant"],
+    "no_gap_variant_rule": "STRICTLY DIAGNOSTIC -- can only invalidate a positive finding, never create or rescue one",
+    "new_code_required": "Clark-West module (stat_tests.py has no DM/CW today) -- exp034-owned"
+  },
+
+  "multiple_testing": {
+    "primary_family": ["T1a_M3_vs_M2", "T1b_M3_vs_M2", "T2a_M3_vs_M2", "T2b_M3_vs_M2"],
+    "n_primary_hypotheses": 4,
+    "method": "fdr_bh",
+    "q": 0.10,
+    "validity_note": "BH validity rests on positive regression dependence among correlated targets; stated, not assumed silently",
+    "m1_only_rule": "beating MODEL_1 but not MODEL_2 is NOT primary evidence of incremental option-chain information and may not be reported as such",
+    "secondary_family": ["T3a", "T3b", "M2_vs_M1", "M3_vs_M1", "expiry_stratification", "lightgbm_robustness"],
+    "secondary_rule": "corrected separately; can never establish a primary claim",
+    "ablations_and_importance": "run ONLY if a primary hypothesis succeeds, and only within the same OOS folds"
+  },
+
+  "preflight_consistency_check": {
+    "requirement": "must run before any execution and exit non-zero on any mismatch, aborting the experiment",
+    "checks": [
+      "chain feature count == 15 and every feature ID F01-F15 present exactly once",
+      "auxiliary indicator count == 1 (iv_available)",
+      "realized model matrix column counts == MODEL_1 30 / MODEL_2 35 / MODEL_3 51 after excluding declared metadata columns",
+      "MODEL_1 subset of MODEL_2 subset of MODEL_3 verified on the built matrices",
+      "primary target count == 4 and target IDs match",
+      "primary hypothesis count == 4",
+      "ablation group membership matches the registry and partitions F01-F15",
+      "audit columns present: feature_timestamp, prediction_start_timestamp, prediction_end_timestamp, elapsed_seconds_t_to_t1",
+      "prediction_start_timestamp > feature_timestamp for every row",
+      "config file hash matches the value recorded at lock time"
+    ],
+    "rationale": "mirrors the EXP033 freeze tooling, which exists precisely to catch the class of drift that produced the 14-vs-15 discrepancy in REV-1",
+    "implementation_status": "specified here; to be implemented after preregistration approval"
+  },
+
+  "power": {
+    "procedure": "minimum detectable effect computed from the initial 30-day training block only, recorded in a locked addendum BEFORE any OOS fold is scored",
+    "prior_expectation_ic_se_day_clustered": [0.02, 0.04],
+    "prior_expectation_detectable_ic": [0.06, 0.11],
+    "realistic_intraday_option_flow_ic": [0.02, 0.05],
+    "pre_declared": "T1 (signed return) is very likely UNDERPOWERED; T2 (magnitude) is where a genuine positive is plausible",
+    "interpretation_rule": "'no evidence of incremental information' and 'evidence of no incremental information' are different conclusions and must never be conflated; at this sample size a T1 null means the former. A null may be reported as evidence of absence only if the pre-computed minimum detectable effect is SMALLER than a meaningful effect size, which is not expected to hold for T1.",
+    "stated_confound": "IV and VIX may largely re-encode recent realized vol; this is why MODEL_3 vs MODEL_2 is primary"
+  },
+
+  "success_criteria_exp034A_all_must_hold": [
+    "mean delta OOS-R2 (MODEL_3 - MODEL_2) > 0 pooled across the OOS period",
+    "Clark-West one-sided p < 0.05 under the day-block bootstrap",
+    "survives BH-FDR at q=0.10 across the 4 primary hypotheses",
+    "improvement positive in >= 2/3 of folds",
+    "effect holds under the locked t+1 timing definition and is not dependent on the diagnostic no-gap variant"
+  ],
+  "success_verdict_exp034A": "EXPLORATORY EVIDENCE OF INCREMENTAL INFORMATION -- authorizes only running EXP034-C; not strategy work, paper trading, or capital",
+  "confirmation_rule": "a finding is CONFIRMED only if EXP034-A's five criteria hold AND EXP034-C independently reproduces the SAME SIGN of improvement on the forward-only sample, same target, same locked pipeline. Any other EXP034-C outcome leaves the finding exploratory.",
+
+  "failure_criteria_any_triggers": [
+    "delta OOS-R2 <= 0",
+    "Clark-West p >= 0.05",
+    "fails FDR",
+    "unstable across folds",
+    "effect depends on the no-gap diagnostic"
+  ],
+  "failure_verdict": "NO EXPLORATORY EVIDENCE OF INCREMENTAL INFORMATION",
+  "inconclusive_band": "point estimate positive but CI spans zero AND estimate below the pre-computed minimum detectable effect -> INCONCLUSIVE - UNDERPOWERED, never reported as evidence of absence",
+  "negative_result_rule": "a negative result is an acceptable and expected outcome; no search continues after it",
+
+  "anti_snooping_guards": [
+    "no threshold, feature, target, horizon or model added, removed or tuned after the first OOS fold is scored",
+    "a weak result is never grounds for adding features",
+    "a losing target is never dropped; all four primaries reported",
+    "the LightGBM check cannot rescue a ridge null, and a ridge null may not trigger a nonlinear-model switch inside this experiment",
+    "feature importance only after a primary success, only OOS",
+    "any genuinely new idea arising during the run belongs to EXP035+"
+  ],
+
+  "scope": {
+    "costs": "none -- information study, not a strategy",
+    "orders": "none",
+    "paper_trading": "none",
+    "deployment": "none"
+  },
+
+  "known_limitations": [
+    "approximately 2-minute irregular sampling (131-133s); t+1 is the next valid snapshot, not a nominal 2-minute offset",
+    "58 usable days; single calm regime (VIX 10.4-15.1), no stress period",
+    "derived OI changes and derived IV rather than stored",
+    "India VIX asynchronous timestamps",
+    "serial correlation within trading days and overlapping future labels",
+    "ATM strike rolls intraday, causing relative-strike feature discontinuity (atm_rolled indicator included; F08-F11 use a fixed-strike rule)",
+    "expiry vs non-expiry regime differences (12 of 58 days) -- indicator plus pre-registered stratified secondary, never a tuning knob",
+    "third pass over the same 59 days -- handled by the sample_reuse decision",
+    "F12 is expected to be small and partly an artifact of the fixed forward assumption",
+    "predictive information is not tradability; economic significance deferred to EXP035+"
+  ]
+}
