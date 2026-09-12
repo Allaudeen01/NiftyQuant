@@ -37,7 +37,41 @@ When a post-freeze defect is found:
 
 ---
 
-## 2. Preregistration amendment
+## 2. Contract-identity differencing (STANDING RULE)
+
+> **For any contract-level time difference:**
+>
+> 1. Identify observations using **absolute contract identity**:
+>    `expiry + strike + option_type`.
+> 2. Compute all temporal differences **while preserving that absolute contract
+>    identity**.
+> 3. Only **after** temporal differencing may observations be mapped into
+>    relative-strike / ATM-normalized coordinates.
+> 4. **Never** difference quantities after relative-strike normalization unless
+>    continuity of the underlying absolute contract has been explicitly
+>    verified.
+
+A relative-strike label such as "ATM+0" does not name a contract. It names
+whichever contract happens to be nearest spot at that instant, and it silently
+changes identity whenever the ATM strike rolls. Differencing along that axis
+subtracts two different instruments.
+
+**Why this is a standing rule rather than a note.** The failure is silent and
+presents as a data defect rather than a code defect. In the EXP035 Phase 0
+audit the ATM strike rolled on **10.71%** of snapshots; differencing after
+normalization produced a **5.3%** negative incremental-volume rate (against a
+true 0.0102%) and broke every bounded derived measure — `top1_share` reached
+4,349 where it is bounded by 1, and centre-of-mass spanned ±49 where it is
+bounded by ±5. Corrected ordering reproduced EXP034's independently established
+0.01% negative rate exactly.
+
+**Classification of that incident:** an **implementation error discovered before
+any outcome inspection** — not a data defect, and not a finding about the
+market. No outcome had been examined at the time it was found and corrected.
+
+---
+
+## 3. Preregistration amendment
 
 A locked preregistration may not be edited. Factual errata are recorded in a
 separate non-binding errata document; methodological changes require a new
@@ -50,7 +84,7 @@ analysis declared after results are seen belongs to a new experiment.
 
 ---
 
-## 3. Data-generating process versioning
+## 4. Data-generating process versioning
 
 Data collected under materially different collection semantics may not be
 silently pooled. When a collector or provider change alters **information
@@ -69,7 +103,7 @@ must be made deliberately, not by accident.
 
 ---
 
-## 4. Evidence vocabulary
+## 5. Evidence vocabulary
 
 "No evidence of an effect" and "evidence of no effect" are different
 conclusions and must never be conflated. A null result may be reported as
@@ -80,7 +114,7 @@ analysis.
 
 ---
 
-## 5. Sample reuse across experiments
+## 6. Sample reuse across experiments
 
 Repeated analysis of the same sample across successive experiments is a
 program-level snooping exposure that no within-experiment correction removes.
