@@ -1,0 +1,992 @@
+{
+  "experiment": "EXP 034-A -- Option Chain Information Content Study (exploratory)",
+  "experiment_id": "exp034-A",
+  "tag": "EXP034_A_FINAL_FROZEN",
+  "status": "FROZEN -- IMMUTABLE. No modifications permitted.",
+  "policy": "Any change to the preregistration, config, feature formulas, model definitions, preprocessing rules, fold definitions, predictions, statistics or verdicts invalidates this freeze and MUST be published as a new experiment id. Never edit EXP034-A in place. EXP034-C is a SEPARATE, pre-committed forward-only replication and must not be started early or run on a partial sample. EXP034-A must not be modified when new data arrives.",
+  "verdict_summary": {
+    "primary_hypotheses": 4,
+    "surviving_fdr": 0,
+    "smallest_q_bh": 0.4104,
+    "T1a_signed_2min": "INCONCLUSIVE - UNDERPOWERED",
+    "T1b_signed_10min": "INCONCLUSIVE - UNDERPOWERED",
+    "T2a_absolute_2min": "NO EXPLORATORY EVIDENCE (adequately powered)",
+    "T2b_absolute_10min": "INCONCLUSIVE - UNDERPOWERED",
+    "headline": "No confirmed incremental option-chain information beyond MODEL_2. One adequately powered primary negative (T2a); three underpowered/inconclusive. Strong SECONDARY evidence that India VIX improves short-horizon realized-movement prediction beyond the price/time baseline (T2a p=0.0002, T2b p=0.0018, 5/5 folds), while MODEL_3 does not improve on MODEL_2.",
+    "prohibited_interpretation": "The secondary finding must NOT be described as evidence that the option-chain feature block adds predictive information.",
+    "exploratory_status": "EXPLORATORY BY CONSTRUCTION -- third pass over the same sample. May not be called confirmed, validated or tradable."
+  },
+  "frozen_at_utc": "2026-09-12T11:00:45.567601+00:00",
+  "manifest_schema": 1,
+  "git": {
+    "commit": "38b129fefc36a825376abd44301af9a8f84c54b3",
+    "commit_short": "38b129f",
+    "branch": "main",
+    "commit_date": "2026-09-12T16:30:45+05:30",
+    "tree_clean_at_freeze": true,
+    "uncommitted_paths": [],
+    "preregistration_lock_commit": "18a178e94dcb2df985c304d3a037de50407acbba",
+    "tag": "EXP034_A_FINAL_FROZEN",
+    "note": "The manifest itself is committed in a child commit; `commit` above is the tree the experiment was RUN against. The tag `EXP034_A_FINAL_FROZEN` points at the commit that includes this manifest."
+  },
+  "binding_preregistration": {
+    "path": "docs/preregistrations/exp034_option_information_content.md",
+    "sha256": "3effad69defbb005afddceac07dedba6f9ef5549edc9261537df20dde95b7a74"
+  },
+  "binding_config": {
+    "path": "docs/preregistrations/exp034_config.json",
+    "sha256": "d7da8be7ba795176c6881b4e559e2294985802861787e8de238c1a1775af3867"
+  },
+  "feature_registry": {
+    "n_chain_features": 15,
+    "n_auxiliary_indicators": 1,
+    "ablation_groups": {
+      "G1": [
+        "F01",
+        "F02",
+        "F03"
+      ],
+      "G2": [
+        "F04",
+        "F05",
+        "F06",
+        "F07"
+      ],
+      "G3": [
+        "F08",
+        "F09"
+      ],
+      "G4": [
+        "F10",
+        "F11",
+        "F12",
+        "F13"
+      ],
+      "G5": [
+        "F14",
+        "F15"
+      ]
+    },
+    "features": [
+      {
+        "feature_id": "F01",
+        "feature_name": "ce_pe_volume_imbalance_atm1",
+        "exact_formula": "(sum_{k in -1,0,1} dv_CE(k,t) - sum dv_PE(k,t)) / (sum dv_CE + sum dv_PE + eps)",
+        "lookback_snapshots": 1,
+        "normalization": "self-normalizing ratio in [-1,1]",
+        "missing_value_rule": "drop observation if t-1 absent",
+        "ablation_group": "G1"
+      },
+      {
+        "feature_id": "F02",
+        "feature_name": "volume_acceleration",
+        "exact_formula": "TV(t) / (mean_{j=1..5} TV(t-j) + eps) - 1, TV(t) = sum_{k in -2..2} (dv_CE + dv_PE)",
+        "lookback_snapshots": 6,
+        "normalization": "self-normalizing ratio",
+        "missing_value_rule": "drop observation if fewer than 6 prior snapshots that day",
+        "ablation_group": "G1"
+      },
+      {
+        "feature_id": "F03",
+        "feature_name": "volume_anomaly_tod",
+        "exact_formula": "(TV(t) - mu_ToD) / (sigma_ToD + eps)",
+        "lookback_snapshots": "prior days",
+        "normalization": "mu,sigma over the same 30-min bucket on PRIOR DAYS ONLY, expanding, min 5 prior days",
+        "missing_value_rule": "drop observation if fewer than 5 prior days available",
+        "ablation_group": "G1"
+      },
+      {
+        "feature_id": "F04",
+        "feature_name": "net_oi_change_imbalance_atm2",
+        "exact_formula": "(sum_{k in -2..2} doi_CE(k,t) - sum doi_PE(k,t)) / (sum |doi_CE| + sum |doi_PE| + eps)",
+        "lookback_snapshots": 1,
+        "normalization": "self-normalizing ratio in [-1,1]",
+        "missing_value_rule": "drop observation if t-1 absent",
+        "ablation_group": "G2"
+      },
+      {
+        "feature_id": "F05",
+        "feature_name": "oi_concentration_atm1",
+        "exact_formula": "sum_{k in -1,0,1} (oi_CE + oi_PE) / sum_{all strikes} (oi_CE + oi_PE)",
+        "lookback_snapshots": 0,
+        "normalization": "ratio in [0,1]",
+        "missing_value_rule": "drop observation if denominator is 0",
+        "ablation_group": "G2"
+      },
+      {
+        "feature_id": "F06",
+        "feature_name": "oi_migration",
+        "exact_formula": "(S_star(t) - S_star(t-1)) / 50, S_star = strike maximizing oi_CE + oi_PE over all collected strikes",
+        "lookback_snapshots": 1,
+        "normalization": "strike steps",
+        "missing_value_rule": "drop observation if t-1 absent",
+        "ablation_group": "G2"
+      },
+      {
+        "feature_id": "F07",
+        "feature_name": "pcr_oi_change",
+        "exact_formula": "PCR(t) - PCR(t-1), PCR = sum_all oi_PE / sum_all oi_CE",
+        "lookback_snapshots": 1,
+        "normalization": "difference of a ratio",
+        "missing_value_rule": "drop observation if t-1 absent or denominator is 0",
+        "ablation_group": "G2"
+      },
+      {
+        "feature_id": "F08",
+        "feature_name": "ce_pe_premium_momentum_diff",
+        "exact_formula": "r_CE - r_PE, r_X = mid_X(0,t)/mid_X(0,t-1) - 1, FIXED-STRIKE: the strike that is ATM at t evaluated at both t and t-1",
+        "lookback_snapshots": 1,
+        "normalization": "return difference",
+        "missing_value_rule": "train-fitted median imputation if that strike is absent at t-1",
+        "ablation_group": "G3"
+      },
+      {
+        "feature_id": "F09",
+        "feature_name": "atm_straddle_return",
+        "exact_formula": "S(t)/S(t-1) - 1, S(t) = mid_CE(0,t) + mid_PE(0,t), same fixed-strike rule",
+        "lookback_snapshots": 1,
+        "normalization": "return",
+        "missing_value_rule": "train-fitted median imputation if absent at t-1",
+        "ablation_group": "G3"
+      },
+      {
+        "feature_id": "F10",
+        "feature_name": "atm_iv",
+        "exact_formula": "mean of iv_CE(0,t), iv_PE(0,t) over those that solve",
+        "lookback_snapshots": 0,
+        "normalization": "vol points (fraction)",
+        "missing_value_rule": "train-fitted median imputation; iv_available = 0",
+        "ablation_group": "G4"
+      },
+      {
+        "feature_id": "F11",
+        "feature_name": "atm_iv_change",
+        "exact_formula": "atm_iv(t) - atm_iv(t-1), fixed-strike",
+        "lookback_snapshots": 1,
+        "normalization": "difference",
+        "missing_value_rule": "train-fitted median imputation; iv_available = 0",
+        "ablation_group": "G4"
+      },
+      {
+        "feature_id": "F12",
+        "feature_name": "iv_skew_ce_minus_pe",
+        "exact_formula": "iv_CE(0,t) - iv_PE(0,t)",
+        "lookback_snapshots": 0,
+        "normalization": "difference",
+        "missing_value_rule": "train-fitted median imputation; iv_available = 0",
+        "ablation_group": "G4"
+      },
+      {
+        "feature_id": "F13",
+        "feature_name": "iv_skew_slope",
+        "exact_formula": "(mean(iv_CE(+1,t), iv_PE(+1,t)) - mean(iv_CE(-1,t), iv_PE(-1,t))) / 2",
+        "lookback_snapshots": 0,
+        "normalization": "vol points per strike step",
+        "missing_value_rule": "train-fitted median imputation; iv_available = 0",
+        "ablation_group": "G4"
+      },
+      {
+        "feature_id": "F14",
+        "feature_name": "dist_to_max_call_oi_norm",
+        "exact_formula": "(K_star_CE(t) - spot(t)) / (S(t) + eps), K_star_CE = max-oi_CE strike above spot",
+        "lookback_snapshots": 0,
+        "normalization": "normalized by ATM straddle implied move",
+        "missing_value_rule": "drop observation if no strike above spot",
+        "ablation_group": "G5"
+      },
+      {
+        "feature_id": "F15",
+        "feature_name": "dist_to_max_put_oi_norm",
+        "exact_formula": "(spot(t) - K_star_PE(t)) / (S(t) + eps), K_star_PE = max-oi_PE strike below spot",
+        "lookback_snapshots": 0,
+        "normalization": "normalized by ATM straddle implied move",
+        "missing_value_rule": "drop observation if no strike below spot",
+        "ablation_group": "G5"
+      }
+    ],
+    "model_matrices": {
+      "MODEL_1": 30,
+      "MODEL_2": 35,
+      "MODEL_3": 51
+    }
+  },
+  "fold_definitions": {
+    "locked_parameters": {
+      "scheme": "expanding_window",
+      "fold_space": "trading_days",
+      "min_train_trading_days": 30,
+      "test_block_trading_days": 5,
+      "step_trading_days": 5,
+      "expected_folds_at_58_days": 6,
+      "expected_oos_trading_days": 28,
+      "purge": "drop training observations whose label window overlaps the test block",
+      "embargo_snapshots": "h (on top of the structural t+1 offset)",
+      "reporting": "per fold and per trading day, never pooled only",
+      "note": "generate_windows() is calendar-day based; exp033 established ~0.72 trading days per calendar day. exp034 does fold arithmetic in trading-day space directly."
+    },
+    "realized_folds": [
+      {
+        "fold_id": 0,
+        "train_days": 30,
+        "test_days": 5,
+        "n_train": 4579,
+        "n_test": 775
+      },
+      {
+        "fold_id": 1,
+        "train_days": 35,
+        "test_days": 5,
+        "n_train": 5354,
+        "n_test": 975
+      },
+      {
+        "fold_id": 2,
+        "train_days": 40,
+        "test_days": 5,
+        "n_train": 6329,
+        "n_test": 784
+      },
+      {
+        "fold_id": 3,
+        "train_days": 45,
+        "test_days": 5,
+        "n_train": 7113,
+        "n_test": 790
+      },
+      {
+        "fold_id": 4,
+        "train_days": 50,
+        "test_days": 2,
+        "n_train": 7903,
+        "n_test": 316
+      }
+    ],
+    "n_folds": 5
+  },
+  "environment": {
+    "python": "3.11.7",
+    "python_implementation": "CPython",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "key_packages": {
+      "numpy": "2.4.4",
+      "pandas": "2.3.3",
+      "scipy": "1.17.1",
+      "statsmodels": "0.14.6",
+      "pyarrow": "23.0.1",
+      "scikit-learn": "1.8.0",
+      "lightgbm": "4.7.0"
+    }
+  },
+  "source_data": {
+    "option_chain_path": "data/option_chain",
+    "n_days": 59,
+    "n_files": 9816,
+    "bytes": 156100381,
+    "root_sha256": "23f80a823bb782b2bd39755da1eb6fe5da2b34d404cd07957caea5cfb1d6657c",
+    "per_day": {
+      "2026-06-22": {
+        "n_files": 170,
+        "bytes": 2765205,
+        "day_sha256": "40a2d5d9a6aa45d1544958ba971b6ac64f29e4a628660fed10ebce41a613f379"
+      },
+      "2026-06-23": {
+        "n_files": 147,
+        "bytes": 2313138,
+        "day_sha256": "85c7f457f0039e5824c127acdd1a1ddf54757643b947c3f2b667ece5a890f80c"
+      },
+      "2026-06-24": {
+        "n_files": 162,
+        "bytes": 2572235,
+        "day_sha256": "2fde35f335be7fc4215b6b624f00497041cf219b4374081054f238c980a8983e"
+      },
+      "2026-06-25": {
+        "n_files": 164,
+        "bytes": 2614742,
+        "day_sha256": "fb642645d09c637acd8578625e714f81ba3267f2f427ebf269380a4501d19974"
+      },
+      "2026-06-26": {
+        "n_files": 127,
+        "bytes": 2010010,
+        "day_sha256": "e15bb490a4c2cdfb551248a00fd603e7db070d0aba5d5f98bc7e8ca4debf814a"
+      },
+      "2026-06-29": {
+        "n_files": 165,
+        "bytes": 2618747,
+        "day_sha256": "cdb6393a452263e98519aca0b2b40ca411f789f13019347c758f399a9e592d6e"
+      },
+      "2026-06-30": {
+        "n_files": 165,
+        "bytes": 2584357,
+        "day_sha256": "c1a780404287da3fce86ff711a32ade7aaae8b5faf909a43fd84e2d590eebe6b"
+      },
+      "2026-07-01": {
+        "n_files": 137,
+        "bytes": 2164022,
+        "day_sha256": "f2267ade3e038267e8e1c73c2a4364e33388ecca09955ee39a2e84cbae78bfed"
+      },
+      "2026-07-02": {
+        "n_files": 165,
+        "bytes": 2599842,
+        "day_sha256": "82f409628b10b9fadb3fb4d36dc9a51dc1c1776c120a396408a39f3a001c9fd2"
+      },
+      "2026-07-03": {
+        "n_files": 168,
+        "bytes": 2661875,
+        "day_sha256": "4378c37780868a1c7c86ac47158dbe12ff859c1e23a18c0a7c731d442af89d03"
+      },
+      "2026-07-06": {
+        "n_files": 168,
+        "bytes": 2662458,
+        "day_sha256": "5abb8951a18eef8325b2bee4c3afda4d6fd86df7fc24cc218cebacdc38c5df44"
+      },
+      "2026-07-07": {
+        "n_files": 22,
+        "bytes": 343043,
+        "day_sha256": "f572954504976e1ba94eac38146e1a2262bc8a2d524140b36cdcfd466be48970"
+      },
+      "2026-07-08": {
+        "n_files": 164,
+        "bytes": 2589820,
+        "day_sha256": "6bbc1bd820cc0e9eeeca56428e7c9e49f068c717ccbe44d33d3cb8c726e24cdd"
+      },
+      "2026-07-09": {
+        "n_files": 172,
+        "bytes": 2739091,
+        "day_sha256": "4f5c2c5d92de238098aced88b5bc68310c17cebed9a1b567522d8a4fa80c6a5e"
+      },
+      "2026-07-10": {
+        "n_files": 172,
+        "bytes": 2743096,
+        "day_sha256": "aade2fd974921e9ded5826aee8cf1e3ca92085ab23426c955325bccfff69c393"
+      },
+      "2026-07-13": {
+        "n_files": 172,
+        "bytes": 2744885,
+        "day_sha256": "cfc541fa4e0588014abab7af18eb92edb697f86556e770c5861db1d4d0284b31"
+      },
+      "2026-07-14": {
+        "n_files": 172,
+        "bytes": 2696929,
+        "day_sha256": "6bd44e79a234bf4b75bae3c3749b5e15211b999005c85a1429c45291400485e5"
+      },
+      "2026-07-15": {
+        "n_files": 170,
+        "bytes": 2723002,
+        "day_sha256": "eec18790c9b5d85435fece95457114d8888fda57a6e4ac36d2372a95ebd1f01c"
+      },
+      "2026-07-16": {
+        "n_files": 170,
+        "bytes": 2708104,
+        "day_sha256": "5469d70ae464e7f8b5c1738c02f3b289a4a70e4106a63f7aa5527d3a4b145f35"
+      },
+      "2026-07-17": {
+        "n_files": 170,
+        "bytes": 2724082,
+        "day_sha256": "20d79bd418ecf9fafc591e568f6cd7ea749b6672a76322f020e15982b2b4806c"
+      },
+      "2026-07-20": {
+        "n_files": 170,
+        "bytes": 2696795,
+        "day_sha256": "5713a6ab18ae43251177a4974986eec92f2f6690e5266045711034c9d0cf8530"
+      },
+      "2026-07-21": {
+        "n_files": 113,
+        "bytes": 1769135,
+        "day_sha256": "89e400e5ecf9c64b8dc0f37a4979d27ade5e56960fbe5704231bd0bdc1db7225"
+      },
+      "2026-07-22": {
+        "n_files": 170,
+        "bytes": 2699462,
+        "day_sha256": "c8dab21e59c416bc056a36b9415962eef5e38e66ffaee05af5b464a317160846"
+      },
+      "2026-07-23": {
+        "n_files": 170,
+        "bytes": 2693365,
+        "day_sha256": "f882280ef7b6554829768e439a968b379734cbf2bcc38b2895d82838e2ad8cc8"
+      },
+      "2026-07-24": {
+        "n_files": 170,
+        "bytes": 2705357,
+        "day_sha256": "f35ce9cfd9799476a6b6649d66c51513994e41ad3995f49e8f5d44ab6e8f36d8"
+      },
+      "2026-07-27": {
+        "n_files": 170,
+        "bytes": 2688523,
+        "day_sha256": "46fe3dd6dc41706ee8166314549e05734dcfa511dc118bd7ace8001810844a77"
+      },
+      "2026-07-28": {
+        "n_files": 170,
+        "bytes": 2650715,
+        "day_sha256": "5b240b10746398d03d03cf91f567a3f6bfdcb11ff23a37210b7293713d0baa46"
+      },
+      "2026-07-29": {
+        "n_files": 172,
+        "bytes": 2725101,
+        "day_sha256": "1fffea3effe4da4b121c79c11209b415ec346842517d74e788d80116adf39714"
+      },
+      "2026-07-30": {
+        "n_files": 172,
+        "bytes": 2710760,
+        "day_sha256": "12e7939bb303640b6129e283e8f9566c152aa988f583ef4d071187de5b041740"
+      },
+      "2026-07-31": {
+        "n_files": 172,
+        "bytes": 2730144,
+        "day_sha256": "bfabc1105c0ab04bbea4ffe45bbfaa7b5f332b0856bd4da5823d62d0acb51a9a"
+      },
+      "2026-08-03": {
+        "n_files": 172,
+        "bytes": 2735139,
+        "day_sha256": "ea37191203aae0dc104947ea2c28618b5af0e638be0c54a130f986cb4cd2607a"
+      },
+      "2026-08-04": {
+        "n_files": 169,
+        "bytes": 2664086,
+        "day_sha256": "1fb83e9574f181476197e8ad382ed21edd2977110ea2eb8311910c2e531bb8cb"
+      },
+      "2026-08-05": {
+        "n_files": 169,
+        "bytes": 2692479,
+        "day_sha256": "8adf3531ba876ccdd21c67c1ee98783ef06632eee55ae0d57b654cebc981f22f"
+      },
+      "2026-08-06": {
+        "n_files": 169,
+        "bytes": 2693991,
+        "day_sha256": "a66a588f70f55b2535fe988d50cc32eb4a337829017385e952fbbef029f5c5ae"
+      },
+      "2026-08-07": {
+        "n_files": 169,
+        "bytes": 2693689,
+        "day_sha256": "ad0fa85ba70c7e9b5038b27f38c3dec21d1d378d0773783e2596b49815baaa8b"
+      },
+      "2026-08-10": {
+        "n_files": 169,
+        "bytes": 2680669,
+        "day_sha256": "a43abd6f4459c3aacc034f40830e0ce990f6971e99cf8d1c9d557652eb491ff3"
+      },
+      "2026-08-11": {
+        "n_files": 169,
+        "bytes": 2652364,
+        "day_sha256": "b774d69c1cc7af51bc99a23676097f1a50260e17d062b91a3d46771172c6f1a2"
+      },
+      "2026-08-12": {
+        "n_files": 169,
+        "bytes": 2711542,
+        "day_sha256": "3b50ae948f46ec90b81d437652309c6070e79de6ca9ad0868c4f9aa488527de4"
+      },
+      "2026-08-13": {
+        "n_files": 169,
+        "bytes": 2690949,
+        "day_sha256": "03cf6a66753e77549c18bcea5cb2c8dff6c946f75d9f52a900feebe72e740215"
+      },
+      "2026-08-14": {
+        "n_files": 169,
+        "bytes": 2681078,
+        "day_sha256": "e27e039ba4daee059805517e9052069eca4ee01ff750272d5287c999521cfff9"
+      },
+      "2026-08-17": {
+        "n_files": 169,
+        "bytes": 2668961,
+        "day_sha256": "a80ce4cdbfbd70bb7014f7960a5923b9e29d881292108aab2ff18d8ccccb3a1a"
+      },
+      "2026-08-18": {
+        "n_files": 169,
+        "bytes": 2639127,
+        "day_sha256": "5c9d657d8f43c32e04bce522d40fd652e01b2f779f5eb663b0afc4ad76c97d44"
+      },
+      "2026-08-19": {
+        "n_files": 169,
+        "bytes": 2663818,
+        "day_sha256": "cab273fa316b508c79baacf34de04600a7409d150776ea1be9a2979766d34758"
+      },
+      "2026-08-20": {
+        "n_files": 169,
+        "bytes": 2674329,
+        "day_sha256": "6e8aa06db49de8a0240fccc7e381516161ecd4d6854bafaa900d5db432cf74e5"
+      },
+      "2026-08-24": {
+        "n_files": 169,
+        "bytes": 2658300,
+        "day_sha256": "4d74b149e39703ad64d79ca77af7b1e73cd8775d81ba52a6bad763124b62f5da"
+      },
+      "2026-08-25": {
+        "n_files": 281,
+        "bytes": 5420235,
+        "day_sha256": "ba2e63666ce87b1ab4e635551662e9a9cb315911a4b17024a86d672468fbbf10"
+      },
+      "2026-08-26": {
+        "n_files": 170,
+        "bytes": 2665010,
+        "day_sha256": "c478bc0ef916aa07356d57dfd4bf9f776a7168726bdfad6c7059689933444770"
+      },
+      "2026-08-27": {
+        "n_files": 170,
+        "bytes": 2662810,
+        "day_sha256": "f457209e214c0b1110d6a917f5c168bb48d5dcd38195c2c3484d4c46c0d3d6a7"
+      },
+      "2026-08-28": {
+        "n_files": 170,
+        "bytes": 2672351,
+        "day_sha256": "ec2b10cd64e0f1f71d9252c18cc07b5dcbe667e81e04d70869703059d5cbec81"
+      },
+      "2026-08-31": {
+        "n_files": 170,
+        "bytes": 2664841,
+        "day_sha256": "d2ccf1bd6f36536e8df5c03ba02599ae534ecb62f075ddabb1334a489e269357"
+      },
+      "2026-09-01": {
+        "n_files": 170,
+        "bytes": 2648148,
+        "day_sha256": "32c7bf2d81ba0debea12f8b941fbff6d6975a4e39bef85e594886026a0433414"
+      },
+      "2026-09-02": {
+        "n_files": 172,
+        "bytes": 2691655,
+        "day_sha256": "caf4aaf046105157deafded9943c8b9cfa9ec28a41d5acf6406aad54a1e13853"
+      },
+      "2026-09-03": {
+        "n_files": 172,
+        "bytes": 2692467,
+        "day_sha256": "eca040a66f7288cce40b162e273e48b3c88372a5c68a774896b3a035c2426b39"
+      },
+      "2026-09-04": {
+        "n_files": 172,
+        "bytes": 2691163,
+        "day_sha256": "bf23fe29959410378978302d679cbd7ba27a3e2b14cbf6a6025bb60eaf997e92"
+      },
+      "2026-09-07": {
+        "n_files": 172,
+        "bytes": 2686962,
+        "day_sha256": "21f08ae40f9aa43f435863511f52e4ce2c4deafe6f7cb860fa89a84445fb502e"
+      },
+      "2026-09-08": {
+        "n_files": 172,
+        "bytes": 2665326,
+        "day_sha256": "823acddc80ad4d0f0574d1c424b06b2327c533f0ee7822402dc124d29721c2a2"
+      },
+      "2026-09-09": {
+        "n_files": 172,
+        "bytes": 2689717,
+        "day_sha256": "54d71024bcbfda2b5e8c1cc7cf112fdb6a7230499d0a9ac3a654a602d8c5fd81"
+      },
+      "2026-09-10": {
+        "n_files": 172,
+        "bytes": 2685775,
+        "day_sha256": "e4cd613d56901d1d956987c7a31e049b91b65c7860a3c26cb1a1016aca4432ce"
+      },
+      "2026-09-11": {
+        "n_files": 172,
+        "bytes": 2715360,
+        "day_sha256": "1c7b2a99f38e633777cf3f8b30be209eacf0f079098609eee8c0c7476f5f215e"
+      }
+    },
+    "vix_path": "data/vix",
+    "vix_n_files": 59,
+    "vix_root_sha256": "f189537e8cbc9cc7b031b3ae172f8ab90ee76606d80bc736e0772546b7edfcb5",
+    "note": "EXP034-A consumed the NEAR EXPIRY only, and excluded 2026-06-26 and 2026-07-07 via the locked per-day quality screen. Exclusions are code-level filters, not data deletions -- the raw fingerprint above covers every collected day."
+  },
+  "derived_artifacts": {
+    "data/derived/exp034_day_certification.parquet": {
+      "present": true,
+      "bytes": 20204,
+      "sha256": "bc6c7b6a39e68900c2cb854cf8273c17b69015a000b1a422d964865d922f4a97",
+      "n_rows": 59,
+      "n_columns": 30
+    },
+    "data/derived/exp034_observations.parquet": {
+      "present": true,
+      "bytes": 565487,
+      "sha256": "8352fbc9ce1947198f48860a1f5227db3ae3a61fe877e2c14c3b6c272aae39d8",
+      "n_rows": 19488,
+      "n_columns": 13
+    },
+    "data/derived/exp034_feature_panel.parquet": {
+      "present": true,
+      "bytes": 3697793,
+      "sha256": "a198f20ef8197d75bc95b047ec6733189bb0f9e4a3801dfe3d7f1ca814dd83c8",
+      "n_rows": 18920,
+      "n_columns": 70
+    }
+  },
+  "outputs": {
+    "reports/exp034/walk_forward_predictions.csv": {
+      "present": true,
+      "bytes": 4795241,
+      "sha256": "8914c9ed091d1a67f17008ea085c0cf96e146fd18ecdd732ba5f23b3d05d9a11",
+      "n_rows": 43164
+    },
+    "reports/exp034/fold_metrics.csv": {
+      "present": true,
+      "bytes": 7317,
+      "sha256": "60355cc97fe8d7836e05701072ae4f50bff39d437358b4b42d7777935f568e27",
+      "n_rows": 60
+    },
+    "reports/exp034/per_day_metrics.csv": {
+      "present": true,
+      "bytes": 13513,
+      "sha256": "d652994558eba3ce2fbc43c7c819c414ea518b25583a5fc19fdbc656958dc87c",
+      "n_rows": 264
+    },
+    "reports/exp034/primary_results.csv": {
+      "present": true,
+      "bytes": 1928,
+      "sha256": "c07b6c09b42e3f276765ff774491cda3403210345b8b364ed4bced62776d0089",
+      "n_rows": 4
+    },
+    "reports/exp034/secondary_results.csv": {
+      "present": true,
+      "bytes": 2221,
+      "sha256": "79edd3bc0d69eb51f07aa5ae3d58b81a063d6710d4dc342cee6d98dbf531216e",
+      "n_rows": 8
+    },
+    "reports/exp034/power_addendum.md": {
+      "present": true,
+      "bytes": 2160,
+      "sha256": "d5e3c3da9b1c0a009df731a69c11ef90e20c9ca2dd1bdd9eddf0e96d56b35b49"
+    },
+    "reports/exp034/power_addendum_values.csv": {
+      "present": true,
+      "bytes": 474,
+      "sha256": "04bc7471b815fc6ded66640ff1f6e0ee2096b103744183dad8945b2dbc41315d",
+      "n_rows": 4
+    },
+    "reports/exp034/phase1_data_audit.md": {
+      "present": true,
+      "bytes": 1967,
+      "sha256": "c5d271b4e48c7ab745bed90df72a420e6ced66a6c26d2b7fc840e8f5a341d0bc"
+    },
+    "reports/exp034/phase2_feature_audit.md": {
+      "present": true,
+      "bytes": 2455,
+      "sha256": "a99039ae97215d2135ef84c3b52bfe17274a07c10ce452d5cc0fbc1ee9a16182"
+    },
+    "reports/exp034/phase3_results.md": {
+      "present": true,
+      "bytes": 4037,
+      "sha256": "33d83fc0e8b19bbcf76f7e957eed0213bc4253268263a6f9c3d2a3049659f6cd"
+    }
+  },
+  "results_inline": {
+    "primary": [
+      {
+        "target": "T1a",
+        "comparison": "MODEL_3_vs_MODEL_2",
+        "oos_target_variance": 6.6427e-08,
+        "cw_mean": 1.9e-11,
+        "cw_se": 8e-11,
+        "p_bootstrap_one_sided": 0.4104,
+        "ci_low": -1.46e-10,
+        "ci_high": 1.7e-10,
+        "n_oos_days": 22,
+        "hac_t": -0.560762132682,
+        "p_hac_one_sided": 0.712520147809,
+        "folds_positive": 2,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 1.02e-10,
+        "p_clean_subsample": 0.0488,
+        "cw_mean_nonoverlapping": 1.9e-11,
+        "p_nonoverlapping": 0.4104,
+        "q_bh": 0.4104,
+        "fdr_survives": false,
+        "delta_r2_approx": 0.000292623721,
+        "mde_delta_r2": 0.001191614362,
+        "ci_spans_zero": true,
+        "estimate_below_mde": true,
+        "crit_1_mean_positive": true,
+        "crit_2_bootstrap_p_lt_05": false,
+        "crit_3_survives_fdr": false,
+        "crit_4_stable_two_thirds": false,
+        "crit_5_not_flag_dependent": true,
+        "verdict": "INCONCLUSIVE - UNDERPOWERED"
+      },
+      {
+        "target": "T1b",
+        "comparison": "MODEL_3_vs_MODEL_2",
+        "oos_target_variance": 3.32089e-07,
+        "cw_mean": 7.08e-10,
+        "cw_se": 1.133e-09,
+        "p_bootstrap_one_sided": 0.2684,
+        "ci_low": -1.424e-09,
+        "ci_high": 3.015e-09,
+        "n_oos_days": 22,
+        "hac_t": 0.120647194128,
+        "p_hac_one_sided": 0.451985243164,
+        "folds_positive": 1,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 1.194e-09,
+        "p_clean_subsample": 0.1306,
+        "cw_mean_nonoverlapping": 6.05e-10,
+        "p_nonoverlapping": 0.3474,
+        "q_bh": 0.4104,
+        "fdr_survives": false,
+        "delta_r2_approx": 0.002133144696,
+        "mde_delta_r2": 0.0026403566,
+        "ci_spans_zero": true,
+        "estimate_below_mde": true,
+        "crit_1_mean_positive": true,
+        "crit_2_bootstrap_p_lt_05": false,
+        "crit_3_survives_fdr": false,
+        "crit_4_stable_two_thirds": false,
+        "crit_5_not_flag_dependent": true,
+        "verdict": "INCONCLUSIVE - UNDERPOWERED"
+      },
+      {
+        "target": "T2a",
+        "comparison": "MODEL_3_vs_MODEL_2",
+        "oos_target_variance": 3.2313e-08,
+        "cw_mean": 1.13e-10,
+        "cw_se": 9.6e-11,
+        "p_bootstrap_one_sided": 0.1174,
+        "ci_low": -6.8e-11,
+        "ci_high": 3.03e-10,
+        "n_oos_days": 22,
+        "hac_t": 1.346398790537,
+        "p_hac_one_sided": 0.089086970395,
+        "folds_positive": 3,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 6.1e-11,
+        "p_clean_subsample": 0.201,
+        "cw_mean_nonoverlapping": 1.13e-10,
+        "p_nonoverlapping": 0.1174,
+        "q_bh": 0.4104,
+        "fdr_survives": false,
+        "delta_r2_approx": 0.003512036224,
+        "mde_delta_r2": 0.001700601757,
+        "ci_spans_zero": true,
+        "estimate_below_mde": false,
+        "crit_1_mean_positive": true,
+        "crit_2_bootstrap_p_lt_05": false,
+        "crit_3_survives_fdr": false,
+        "crit_4_stable_two_thirds": false,
+        "crit_5_not_flag_dependent": true,
+        "verdict": "NO EXPLORATORY EVIDENCE OF INCREMENTAL INFORMATION"
+      },
+      {
+        "target": "T2b",
+        "comparison": "MODEL_3_vs_MODEL_2",
+        "oos_target_variance": 1.55579e-07,
+        "cw_mean": 1.21e-10,
+        "cw_se": 5.37e-10,
+        "p_bootstrap_one_sided": 0.4016,
+        "ci_low": -9.49e-10,
+        "ci_high": 1.141e-09,
+        "n_oos_days": 22,
+        "hac_t": 0.534639421635,
+        "p_hac_one_sided": 0.296449609173,
+        "folds_positive": 3,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": -5.7e-11,
+        "p_clean_subsample": 0.5468,
+        "cw_mean_nonoverlapping": -6.01e-10,
+        "p_nonoverlapping": 0.7004,
+        "q_bh": 0.4104,
+        "fdr_survives": false,
+        "delta_r2_approx": 0.00077647477,
+        "mde_delta_r2": 0.002582684903,
+        "ci_spans_zero": true,
+        "estimate_below_mde": true,
+        "crit_1_mean_positive": true,
+        "crit_2_bootstrap_p_lt_05": false,
+        "crit_3_survives_fdr": false,
+        "crit_4_stable_two_thirds": false,
+        "crit_5_not_flag_dependent": false,
+        "verdict": "INCONCLUSIVE - UNDERPOWERED"
+      }
+    ],
+    "secondary": [
+      {
+        "target": "T1a",
+        "comparison": "MODEL_3_vs_MODEL_1",
+        "oos_target_variance": 6.6427e-08,
+        "cw_mean": 1.14e-10,
+        "cw_se": 1.44e-10,
+        "p_bootstrap_one_sided": 0.209,
+        "ci_low": -1.7e-10,
+        "ci_high": 4.05e-10,
+        "n_oos_days": 22,
+        "hac_t": -0.080223177994,
+        "p_hac_one_sided": 0.531970121902,
+        "folds_positive": 4,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 2.33e-10,
+        "p_clean_subsample": 0.045,
+        "cw_mean_nonoverlapping": 1.14e-10,
+        "p_nonoverlapping": 0.209
+      },
+      {
+        "target": "T1a",
+        "comparison": "MODEL_2_vs_MODEL_1",
+        "oos_target_variance": 6.6427e-08,
+        "cw_mean": 7.7e-11,
+        "cw_se": 1.12e-10,
+        "p_bootstrap_one_sided": 0.2496,
+        "ci_low": -1.34e-10,
+        "ci_high": 3.06e-10,
+        "n_oos_days": 22,
+        "hac_t": 0.129495338465,
+        "p_hac_one_sided": 0.448482856631,
+        "folds_positive": 3,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 1.22e-10,
+        "p_clean_subsample": 0.1448,
+        "cw_mean_nonoverlapping": 7.7e-11,
+        "p_nonoverlapping": 0.2496
+      },
+      {
+        "target": "T1b",
+        "comparison": "MODEL_3_vs_MODEL_1",
+        "oos_target_variance": 3.32089e-07,
+        "cw_mean": 1.972e-09,
+        "cw_se": 2.454e-09,
+        "p_bootstrap_one_sided": 0.227,
+        "ci_low": -2.724e-09,
+        "ci_high": 6.83e-09,
+        "n_oos_days": 22,
+        "hac_t": 0.284614195871,
+        "p_hac_one_sided": 0.387969867077,
+        "folds_positive": 3,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 3.143e-09,
+        "p_clean_subsample": 0.0698,
+        "cw_mean_nonoverlapping": -3.08e-10,
+        "p_nonoverlapping": 0.5462
+      },
+      {
+        "target": "T1b",
+        "comparison": "MODEL_2_vs_MODEL_1",
+        "oos_target_variance": 3.32089e-07,
+        "cw_mean": 1.618e-09,
+        "cw_se": 2.167e-09,
+        "p_bootstrap_one_sided": 0.236,
+        "ci_low": -2.463e-09,
+        "ci_high": 5.894e-09,
+        "n_oos_days": 22,
+        "hac_t": 0.394946492891,
+        "p_hac_one_sided": 0.346441188468,
+        "folds_positive": 3,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 2.395e-09,
+        "p_clean_subsample": 0.1404,
+        "cw_mean_nonoverlapping": -3.29e-10,
+        "p_nonoverlapping": 0.5624
+      },
+      {
+        "target": "T2a",
+        "comparison": "MODEL_3_vs_MODEL_1",
+        "oos_target_variance": 3.2313e-08,
+        "cw_mean": 1.128e-09,
+        "cw_se": 3.39e-10,
+        "p_bootstrap_one_sided": 0.0002,
+        "ci_low": 4.6e-10,
+        "ci_high": 1.785e-09,
+        "n_oos_days": 22,
+        "hac_t": 6.61833562465,
+        "p_hac_one_sided": 1.8e-11,
+        "folds_positive": 5,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 9.84e-10,
+        "p_clean_subsample": 0.0,
+        "cw_mean_nonoverlapping": 1.128e-09,
+        "p_nonoverlapping": 0.0002
+      },
+      {
+        "target": "T2a",
+        "comparison": "MODEL_2_vs_MODEL_1",
+        "oos_target_variance": 3.2313e-08,
+        "cw_mean": 1.104e-09,
+        "cw_se": 3.38e-10,
+        "p_bootstrap_one_sided": 0.0002,
+        "ci_low": 4.46e-10,
+        "ci_high": 1.749e-09,
+        "n_oos_days": 22,
+        "hac_t": 6.941529202088,
+        "p_hac_one_sided": 2e-12,
+        "folds_positive": 5,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 1.017e-09,
+        "p_clean_subsample": 0.0002,
+        "cw_mean_nonoverlapping": 1.104e-09,
+        "p_nonoverlapping": 0.0002
+      },
+      {
+        "target": "T2b",
+        "comparison": "MODEL_3_vs_MODEL_1",
+        "oos_target_variance": 1.55579e-07,
+        "cw_mean": 5.094e-09,
+        "cw_se": 1.889e-09,
+        "p_bootstrap_one_sided": 0.0058,
+        "ci_low": 1.651e-09,
+        "ci_high": 8.983e-09,
+        "n_oos_days": 22,
+        "hac_t": 4.344672725204,
+        "p_hac_one_sided": 6.974173e-06,
+        "folds_positive": 5,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 4.295e-09,
+        "p_clean_subsample": 0.0038,
+        "cw_mean_nonoverlapping": 4.93e-09,
+        "p_nonoverlapping": 0.0348
+      },
+      {
+        "target": "T2b",
+        "comparison": "MODEL_2_vs_MODEL_1",
+        "oos_target_variance": 1.55579e-07,
+        "cw_mean": 5.7e-09,
+        "cw_se": 1.963e-09,
+        "p_bootstrap_one_sided": 0.0018,
+        "ci_low": 1.907e-09,
+        "ci_high": 9.655e-09,
+        "n_oos_days": 22,
+        "hac_t": 4.576538620737,
+        "p_hac_one_sided": 2.363662e-06,
+        "folds_positive": 5,
+        "folds_total": 5,
+        "cw_mean_clean_subsample": 5.251e-09,
+        "p_clean_subsample": 0.0022,
+        "cw_mean_nonoverlapping": 6.108e-09,
+        "p_nonoverlapping": 0.0006
+      }
+    ]
+  },
+  "bug_disclosure": {
+    "document": "docs/exp034a_bug_disclosure.md",
+    "defects": [
+      {
+        "id": 1,
+        "component": "nifty_quant/analytics/clark_west.py::hac_one_sided",
+        "mechanism": "np.allclose(std, 0.0) applies a 1e-8 ABSOLUTE tolerance; a genuine Clark-West series has std ~1e-10 and was wrongly declared constant, returning NaN",
+        "correction": "degeneracy tested exactly via np.std(x) == 0.0",
+        "effect_on_verdicts": "none -- primary inference was always the day-block bootstrap; HAC is a cross-check and now agrees",
+        "methodology_changed": false
+      },
+      {
+        "id": 2,
+        "component": "scripts/exp034_walk_forward.py verdict logic",
+        "mechanism": "the locked inconclusive band requires CI-spans-zero AND estimate-below-MDE; only the CI clause was implemented, so every CI-spanning target collapsed to UNDERPOWERED",
+        "correction": "CW mean expressed as approximate incremental R^2 and compared against the pre-computed mde_delta_r2_approx; the run now aborts if the MDE file is absent",
+        "effect_on_verdicts": "T2a moved INCONCLUSIVE -> NO EXPLORATORY EVIDENCE, a STRONGER and more honest statement; the defect had understated the result. T1a/T1b/T2b unchanged",
+        "methodology_changed": false
+      }
+    ],
+    "locked_methodology_unchanged": true,
+    "evidence": "git diff against the lock commit was empty for both binding files at every step; preflight passed before any fold was scored"
+  },
+  "source_files_sha256": {
+    "_hash_method": "sha256 of content with CRLF/CR normalised to LF",
+    "docs/preregistrations/exp034_option_information_content.md": "3effad69defbb005afddceac07dedba6f9ef5549edc9261537df20dde95b7a74",
+    "docs/preregistrations/exp034_config.json": "d7da8be7ba795176c6881b4e559e2294985802861787e8de238c1a1775af3867",
+    "docs/exp034_errata.md": "eb2f9cd504fd05d9172cde50d1382127216d20a13604baf0a9ebe81ce0a8d391",
+    "docs/exp034a_bug_disclosure.md": "6763e74bb799df42acfe50eb5cf7c32ceee3d84da21ca943c6d12888d98c8d6e",
+    "docs/RESEARCH_POLICY.md": "6d684544adcdb2ccdcc13146ee0bf2c41d68c491a885e6b1c1355da3eaa0ddf9",
+    "scripts/exp034_preflight.py": "4eaf25c7c9a31ecc14034bd49ed55d691ecd7b806e7e99c7ae8a24e3849dbeea",
+    "scripts/exp034_build_observations.py": "fb037ac47795db457a6e3ff822e916629f7a0a9b5bec0cc28ffd36432c619654",
+    "scripts/exp034_build_features.py": "1b3e0d5ed68655aa64227747b3ff6ca553534d155cfc1c79a7aa85e415823f22",
+    "scripts/exp034_power_addendum.py": "2fadd102c1af164ba29c9cfb527c0839e65e8780243f90535f4644cddcbade97",
+    "scripts/exp034_walk_forward.py": "18d56771c066930b1539c65ddf937d7ba71d9e88511f4eb2d6016a29fa32efc1",
+    "scripts/exp034a_freeze.py": "0b45093b89093b0d3c8e76884da5fa9d5df4500b16415decc579f9641b458ec2",
+    "nifty_quant/features/exp034_features.py": "a52734977f59b591615319ec3db96411f91ecc7c3c5ca6a93fd57b5ab1aefe5f",
+    "nifty_quant/analytics/clark_west.py": "01c8a013d02eb9fc6f4e5d36f7277fa3254d1da63752c9e460baf235c4e31759",
+    "nifty_quant/analytics/data_snooping.py": "139aea4dbedb573f31245de125d21096b972144def1f8d708912ad39c7346f00",
+    "nifty_quant/analytics/black_scholes.py": "de108c4f90186cafbf082cf37429dbaf4aa7557bfbe1e5c17633e893f1299a06"
+  }
+}
