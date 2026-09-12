@@ -1,0 +1,1243 @@
+{
+  "experiment": "EXP 033 -- Option Chain Event Predictability Engine",
+  "experiment_id": "exp033",
+  "tag": "EXP033_FINAL_FROZEN",
+  "status": "FROZEN -- IMMUTABLE. No modifications permitted.",
+  "policy": "Any change to event definitions, barrier configs, thresholds, data or code invalidates this freeze and MUST be published as a new experiment id (exp034+). Never edit exp033 in place. Re-running the locked pipeline on NEW data is an out-of-sample test and must be reported as a separate experiment.",
+  "verdict": "NO CANDIDATE REACHED WALK_FORWARD_VALIDATED -- 9/18 REJECT, 9/18 INSUFFICIENT_DATA.",
+  "frozen_at_utc": "2026-09-12T09:17:58.296924+00:00",
+  "preregistration": "docs/preregistrations/exp033_option_event_predictability.md",
+  "event_definitions": "docs/preregistrations/exp033_event_definitions.json",
+  "manifest_schema": 1,
+  "git": {
+    "commit": "5a1d3ba702c2420a8e1f6562ff4da355a8f08c76",
+    "commit_short": "5a1d3ba",
+    "branch": "main",
+    "commit_date": "2026-09-12T14:47:53+05:30",
+    "tree_clean_at_freeze": false,
+    "uncommitted_paths": [
+      "scripts/exp033_freeze.py"
+    ],
+    "tag": "EXP033_FINAL_FROZEN",
+    "note": "The manifest itself is committed in a child commit; `commit` above is the tree the experiment was RUN against. The tag `EXP033_FINAL_FROZEN` points at the commit that includes this manifest."
+  },
+  "locked_event_and_barrier_config": {
+    "experiment_id": "exp033",
+    "preregistration": "docs/preregistrations/exp033_option_event_predictability.md",
+    "event_universe_version": "exp033-events-v1.0",
+    "locked_at": "2026-09-12",
+    "relative_strikes": [
+      -2,
+      -1,
+      0,
+      1,
+      2
+    ],
+    "option_types": [
+      "CE",
+      "PE"
+    ],
+    "rolling_basis": "same_day_causal_expanding",
+    "min_prior_snapshots_same_day": 10,
+    "families": {
+      "E1_VOLUME_SPIKE": {
+        "version": "v1.0",
+        "metric": "zscore_2min_volume_increment",
+        "window_snapshots": 20,
+        "trigger_abs_z": 2.5
+      },
+      "E2_OI_EXPANSION": {
+        "version": "v1.0",
+        "metric": "zscore_derived_oi_change",
+        "window_snapshots": 20,
+        "trigger_z_gte": 2.0
+      },
+      "E3_OI_UNWINDING": {
+        "version": "v1.0",
+        "metric": "zscore_derived_oi_change",
+        "window_snapshots": 20,
+        "trigger_z_lte": -2.0
+      },
+      "E4_PREMIUM_MOMENTUM": {
+        "version": "v1.0",
+        "metric": "rolling_percentile_2min_mid_return",
+        "window_snapshots": 30,
+        "trigger_pctile_up_gte": 90,
+        "trigger_pctile_down_lte": 10
+      },
+      "E5_IV_SHOCK": {
+        "version": "v1.0",
+        "metric": "zscore_derived_atm_iv",
+        "window_snapshots": 20,
+        "trigger_abs_z": 2.0,
+        "disabled_if_iv_unsolvable": true,
+        "iv_defaults": {
+          "r_rate": 0.065,
+          "q_yield": 0.012
+        }
+      }
+    },
+    "combined_events": {
+      "version": "v1.0",
+      "evaluated_per_relative_strike_level": true,
+      "evaluation_note": "Each combo is checked independently at every one of the 5 tracked relative-strike levels (ATM-2..ATM+2), not ATM-only -- consistent with Part 2's strike-generic design. A combo can fire at more than one level in the same snapshot; each firing is its own event record.",
+      "definitions": [
+        {
+          "code": "E6.1",
+          "name": "CALL_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+          "legs": [
+            "E1:CE",
+            "E4_up:CE"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "code": "E6.2",
+          "name": "PUT_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+          "legs": [
+            "E1:PE",
+            "E4_up:PE"
+          ],
+          "direction": "BEARISH"
+        },
+        {
+          "code": "E6.3",
+          "name": "CALL_OI_UNWINDING_PREMIUM_RISE",
+          "legs": [
+            "E3:CE",
+            "E4_up:CE"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "code": "E6.4",
+          "name": "PUT_OI_UNWINDING_PREMIUM_RISE",
+          "legs": [
+            "E3:PE",
+            "E4_up:PE"
+          ],
+          "direction": "BEARISH"
+        },
+        {
+          "code": "E6.5",
+          "name": "PUT_OI_EXPANSION_PREMIUM_FALL",
+          "legs": [
+            "E2:PE",
+            "E4_down:PE"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "code": "E6.6",
+          "name": "CALL_OI_EXPANSION_PREMIUM_FALL",
+          "legs": [
+            "E2:CE",
+            "E4_down:CE"
+          ],
+          "direction": "BEARISH"
+        }
+      ]
+    },
+    "triple_barrier_configs": {
+      "CONFIG_A": {
+        "target_pts": 5,
+        "stop_pts": 5,
+        "max_hold_min": 10
+      },
+      "CONFIG_B": {
+        "target_pts": 10,
+        "stop_pts": 5,
+        "max_hold_min": 15
+      },
+      "CONFIG_C": {
+        "target_pts": 5,
+        "stop_pts": 10,
+        "max_hold_min": 15
+      }
+    },
+    "barrier_resolution_policy": "conservative_interval_range_ambiguous_if_both_spanned",
+    "non_overlapping_event_selection": {
+      "locked_at": "phase5_pre_outcome",
+      "rule": "per (event_type, relative_strike, option_type, barrier_config), suppress new firings while a prior instance's holding window is still open",
+      "rationale": "53719 base / 6592 combined raw firings over 58 days indicate persistence across consecutive ~2min snapshots; labeling every firing pseudo-replicates one price path many times and inflates n"
+    },
+    "excluded_trading_days": {
+      "2026-06-26": "frozen/stale spot feed, std=0 across full session (Phase-2 audit finding)"
+    },
+    "flagged_trading_days": {
+      "2026-06-22": "double-cadence manual-collection artifact (Exp032 precedent), clock-based logic uses first-snapshot-at-or-after"
+    },
+    "instrument": "futures_proxy",
+    "cost_model_source": "scripts/strategy_test_framework.py::futures_cost_fraction,directional_return",
+    "signal_generation_thresholds": {
+      "min_support_train": 30,
+      "p_target_first_min": 0.55,
+      "p_target_minus_stop_min": 0.15,
+      "ev_min": 0.0,
+      "calibration_gate": "brier_model_c_lt_naive_per_fold"
+    },
+    "walk_forward": {
+      "generator": "nifty_quant.research.walkforward.generate_windows",
+      "generator_signature_note": "calendar-day train/test window only; no validation split, no trading-day awareness -- both handled by exp033 fold-assembly code around the generator's output",
+      "outer_train_days_calendar": 47,
+      "outer_test_days_calendar": 10,
+      "outer_step_days_calendar": 10,
+      "calendar_days_correction_note": "originally locked as 33/8/8 calendar days on the (wrong) assumption of ~1 trading day per calendar day; at this sample's actual ~0.72 trading-day/calendar-day density that left only ~23 trading days for a 25-day fit split, i.e. zero left for calibration. Corrected to 47/10/10 before any model was trained on real data (caught during Phase 8 dry-run, an implementation bug fix, not a threshold change) -- the trading-day targets below are unchanged.",
+      "inner_split_of_outer_train_block": {
+        "fit_trading_days": 25,
+        "calibration_trading_days": "remainder (~8)"
+      }
+    },
+    "multiple_testing": {
+      "n_primary_hypotheses": 18,
+      "fdr_method": "fdr_bh",
+      "fdr_q": 0.1,
+      "spa_block_len": 10,
+      "spa_n_boot": 5000
+    }
+  },
+  "environment": {
+    "python": "3.11.7",
+    "python_implementation": "CPython",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "key_packages": {
+      "numpy": "2.4.4",
+      "pandas": "2.3.3",
+      "scipy": "1.17.1",
+      "statsmodels": "0.14.6",
+      "pyarrow": "23.0.1",
+      "scikit-learn": "1.8.0",
+      "lightgbm": "4.7.0"
+    },
+    "installed_distributions_count": 212,
+    "installed_distributions_sha256": "c6b72d5dd84a490be1d257f8562511c4dcd2002b9c741ae0513ce2a8a8745325"
+  },
+  "source_data": {
+    "option_chain_path": "data/option_chain",
+    "vix_path": "data/vix",
+    "n_days": 59,
+    "n_files": 9816,
+    "bytes": 156100381,
+    "root_sha256": "23f80a823bb782b2bd39755da1eb6fe5da2b34d404cd07957caea5cfb1d6657c",
+    "vix_n_files": 59,
+    "vix_root_sha256": "f189537e8cbc9cc7b031b3ae172f8ab90ee76606d80bc736e0772546b7edfcb5",
+    "per_day": {
+      "2026-06-22": {
+        "n_files": 170,
+        "bytes": 2765205,
+        "day_sha256": "40a2d5d9a6aa45d1544958ba971b6ac64f29e4a628660fed10ebce41a613f379"
+      },
+      "2026-06-23": {
+        "n_files": 147,
+        "bytes": 2313138,
+        "day_sha256": "85c7f457f0039e5824c127acdd1a1ddf54757643b947c3f2b667ece5a890f80c"
+      },
+      "2026-06-24": {
+        "n_files": 162,
+        "bytes": 2572235,
+        "day_sha256": "2fde35f335be7fc4215b6b624f00497041cf219b4374081054f238c980a8983e"
+      },
+      "2026-06-25": {
+        "n_files": 164,
+        "bytes": 2614742,
+        "day_sha256": "fb642645d09c637acd8578625e714f81ba3267f2f427ebf269380a4501d19974"
+      },
+      "2026-06-26": {
+        "n_files": 127,
+        "bytes": 2010010,
+        "day_sha256": "e15bb490a4c2cdfb551248a00fd603e7db070d0aba5d5f98bc7e8ca4debf814a"
+      },
+      "2026-06-29": {
+        "n_files": 165,
+        "bytes": 2618747,
+        "day_sha256": "cdb6393a452263e98519aca0b2b40ca411f789f13019347c758f399a9e592d6e"
+      },
+      "2026-06-30": {
+        "n_files": 165,
+        "bytes": 2584357,
+        "day_sha256": "c1a780404287da3fce86ff711a32ade7aaae8b5faf909a43fd84e2d590eebe6b"
+      },
+      "2026-07-01": {
+        "n_files": 137,
+        "bytes": 2164022,
+        "day_sha256": "f2267ade3e038267e8e1c73c2a4364e33388ecca09955ee39a2e84cbae78bfed"
+      },
+      "2026-07-02": {
+        "n_files": 165,
+        "bytes": 2599842,
+        "day_sha256": "82f409628b10b9fadb3fb4d36dc9a51dc1c1776c120a396408a39f3a001c9fd2"
+      },
+      "2026-07-03": {
+        "n_files": 168,
+        "bytes": 2661875,
+        "day_sha256": "4378c37780868a1c7c86ac47158dbe12ff859c1e23a18c0a7c731d442af89d03"
+      },
+      "2026-07-06": {
+        "n_files": 168,
+        "bytes": 2662458,
+        "day_sha256": "5abb8951a18eef8325b2bee4c3afda4d6fd86df7fc24cc218cebacdc38c5df44"
+      },
+      "2026-07-07": {
+        "n_files": 22,
+        "bytes": 343043,
+        "day_sha256": "f572954504976e1ba94eac38146e1a2262bc8a2d524140b36cdcfd466be48970"
+      },
+      "2026-07-08": {
+        "n_files": 164,
+        "bytes": 2589820,
+        "day_sha256": "6bbc1bd820cc0e9eeeca56428e7c9e49f068c717ccbe44d33d3cb8c726e24cdd"
+      },
+      "2026-07-09": {
+        "n_files": 172,
+        "bytes": 2739091,
+        "day_sha256": "4f5c2c5d92de238098aced88b5bc68310c17cebed9a1b567522d8a4fa80c6a5e"
+      },
+      "2026-07-10": {
+        "n_files": 172,
+        "bytes": 2743096,
+        "day_sha256": "aade2fd974921e9ded5826aee8cf1e3ca92085ab23426c955325bccfff69c393"
+      },
+      "2026-07-13": {
+        "n_files": 172,
+        "bytes": 2744885,
+        "day_sha256": "cfc541fa4e0588014abab7af18eb92edb697f86556e770c5861db1d4d0284b31"
+      },
+      "2026-07-14": {
+        "n_files": 172,
+        "bytes": 2696929,
+        "day_sha256": "6bd44e79a234bf4b75bae3c3749b5e15211b999005c85a1429c45291400485e5"
+      },
+      "2026-07-15": {
+        "n_files": 170,
+        "bytes": 2723002,
+        "day_sha256": "eec18790c9b5d85435fece95457114d8888fda57a6e4ac36d2372a95ebd1f01c"
+      },
+      "2026-07-16": {
+        "n_files": 170,
+        "bytes": 2708104,
+        "day_sha256": "5469d70ae464e7f8b5c1738c02f3b289a4a70e4106a63f7aa5527d3a4b145f35"
+      },
+      "2026-07-17": {
+        "n_files": 170,
+        "bytes": 2724082,
+        "day_sha256": "20d79bd418ecf9fafc591e568f6cd7ea749b6672a76322f020e15982b2b4806c"
+      },
+      "2026-07-20": {
+        "n_files": 170,
+        "bytes": 2696795,
+        "day_sha256": "5713a6ab18ae43251177a4974986eec92f2f6690e5266045711034c9d0cf8530"
+      },
+      "2026-07-21": {
+        "n_files": 113,
+        "bytes": 1769135,
+        "day_sha256": "89e400e5ecf9c64b8dc0f37a4979d27ade5e56960fbe5704231bd0bdc1db7225"
+      },
+      "2026-07-22": {
+        "n_files": 170,
+        "bytes": 2699462,
+        "day_sha256": "c8dab21e59c416bc056a36b9415962eef5e38e66ffaee05af5b464a317160846"
+      },
+      "2026-07-23": {
+        "n_files": 170,
+        "bytes": 2693365,
+        "day_sha256": "f882280ef7b6554829768e439a968b379734cbf2bcc38b2895d82838e2ad8cc8"
+      },
+      "2026-07-24": {
+        "n_files": 170,
+        "bytes": 2705357,
+        "day_sha256": "f35ce9cfd9799476a6b6649d66c51513994e41ad3995f49e8f5d44ab6e8f36d8"
+      },
+      "2026-07-27": {
+        "n_files": 170,
+        "bytes": 2688523,
+        "day_sha256": "46fe3dd6dc41706ee8166314549e05734dcfa511dc118bd7ace8001810844a77"
+      },
+      "2026-07-28": {
+        "n_files": 170,
+        "bytes": 2650715,
+        "day_sha256": "5b240b10746398d03d03cf91f567a3f6bfdcb11ff23a37210b7293713d0baa46"
+      },
+      "2026-07-29": {
+        "n_files": 172,
+        "bytes": 2725101,
+        "day_sha256": "1fffea3effe4da4b121c79c11209b415ec346842517d74e788d80116adf39714"
+      },
+      "2026-07-30": {
+        "n_files": 172,
+        "bytes": 2710760,
+        "day_sha256": "12e7939bb303640b6129e283e8f9566c152aa988f583ef4d071187de5b041740"
+      },
+      "2026-07-31": {
+        "n_files": 172,
+        "bytes": 2730144,
+        "day_sha256": "bfabc1105c0ab04bbea4ffe45bbfaa7b5f332b0856bd4da5823d62d0acb51a9a"
+      },
+      "2026-08-03": {
+        "n_files": 172,
+        "bytes": 2735139,
+        "day_sha256": "ea37191203aae0dc104947ea2c28618b5af0e638be0c54a130f986cb4cd2607a"
+      },
+      "2026-08-04": {
+        "n_files": 169,
+        "bytes": 2664086,
+        "day_sha256": "1fb83e9574f181476197e8ad382ed21edd2977110ea2eb8311910c2e531bb8cb"
+      },
+      "2026-08-05": {
+        "n_files": 169,
+        "bytes": 2692479,
+        "day_sha256": "8adf3531ba876ccdd21c67c1ee98783ef06632eee55ae0d57b654cebc981f22f"
+      },
+      "2026-08-06": {
+        "n_files": 169,
+        "bytes": 2693991,
+        "day_sha256": "a66a588f70f55b2535fe988d50cc32eb4a337829017385e952fbbef029f5c5ae"
+      },
+      "2026-08-07": {
+        "n_files": 169,
+        "bytes": 2693689,
+        "day_sha256": "ad0fa85ba70c7e9b5038b27f38c3dec21d1d378d0773783e2596b49815baaa8b"
+      },
+      "2026-08-10": {
+        "n_files": 169,
+        "bytes": 2680669,
+        "day_sha256": "a43abd6f4459c3aacc034f40830e0ce990f6971e99cf8d1c9d557652eb491ff3"
+      },
+      "2026-08-11": {
+        "n_files": 169,
+        "bytes": 2652364,
+        "day_sha256": "b774d69c1cc7af51bc99a23676097f1a50260e17d062b91a3d46771172c6f1a2"
+      },
+      "2026-08-12": {
+        "n_files": 169,
+        "bytes": 2711542,
+        "day_sha256": "3b50ae948f46ec90b81d437652309c6070e79de6ca9ad0868c4f9aa488527de4"
+      },
+      "2026-08-13": {
+        "n_files": 169,
+        "bytes": 2690949,
+        "day_sha256": "03cf6a66753e77549c18bcea5cb2c8dff6c946f75d9f52a900feebe72e740215"
+      },
+      "2026-08-14": {
+        "n_files": 169,
+        "bytes": 2681078,
+        "day_sha256": "e27e039ba4daee059805517e9052069eca4ee01ff750272d5287c999521cfff9"
+      },
+      "2026-08-17": {
+        "n_files": 169,
+        "bytes": 2668961,
+        "day_sha256": "a80ce4cdbfbd70bb7014f7960a5923b9e29d881292108aab2ff18d8ccccb3a1a"
+      },
+      "2026-08-18": {
+        "n_files": 169,
+        "bytes": 2639127,
+        "day_sha256": "5c9d657d8f43c32e04bce522d40fd652e01b2f779f5eb663b0afc4ad76c97d44"
+      },
+      "2026-08-19": {
+        "n_files": 169,
+        "bytes": 2663818,
+        "day_sha256": "cab273fa316b508c79baacf34de04600a7409d150776ea1be9a2979766d34758"
+      },
+      "2026-08-20": {
+        "n_files": 169,
+        "bytes": 2674329,
+        "day_sha256": "6e8aa06db49de8a0240fccc7e381516161ecd4d6854bafaa900d5db432cf74e5"
+      },
+      "2026-08-24": {
+        "n_files": 169,
+        "bytes": 2658300,
+        "day_sha256": "4d74b149e39703ad64d79ca77af7b1e73cd8775d81ba52a6bad763124b62f5da"
+      },
+      "2026-08-25": {
+        "n_files": 281,
+        "bytes": 5420235,
+        "day_sha256": "ba2e63666ce87b1ab4e635551662e9a9cb315911a4b17024a86d672468fbbf10"
+      },
+      "2026-08-26": {
+        "n_files": 170,
+        "bytes": 2665010,
+        "day_sha256": "c478bc0ef916aa07356d57dfd4bf9f776a7168726bdfad6c7059689933444770"
+      },
+      "2026-08-27": {
+        "n_files": 170,
+        "bytes": 2662810,
+        "day_sha256": "f457209e214c0b1110d6a917f5c168bb48d5dcd38195c2c3484d4c46c0d3d6a7"
+      },
+      "2026-08-28": {
+        "n_files": 170,
+        "bytes": 2672351,
+        "day_sha256": "ec2b10cd64e0f1f71d9252c18cc07b5dcbe667e81e04d70869703059d5cbec81"
+      },
+      "2026-08-31": {
+        "n_files": 170,
+        "bytes": 2664841,
+        "day_sha256": "d2ccf1bd6f36536e8df5c03ba02599ae534ecb62f075ddabb1334a489e269357"
+      },
+      "2026-09-01": {
+        "n_files": 170,
+        "bytes": 2648148,
+        "day_sha256": "32c7bf2d81ba0debea12f8b941fbff6d6975a4e39bef85e594886026a0433414"
+      },
+      "2026-09-02": {
+        "n_files": 172,
+        "bytes": 2691655,
+        "day_sha256": "caf4aaf046105157deafded9943c8b9cfa9ec28a41d5acf6406aad54a1e13853"
+      },
+      "2026-09-03": {
+        "n_files": 172,
+        "bytes": 2692467,
+        "day_sha256": "eca040a66f7288cce40b162e273e48b3c88372a5c68a774896b3a035c2426b39"
+      },
+      "2026-09-04": {
+        "n_files": 172,
+        "bytes": 2691163,
+        "day_sha256": "bf23fe29959410378978302d679cbd7ba27a3e2b14cbf6a6025bb60eaf997e92"
+      },
+      "2026-09-07": {
+        "n_files": 172,
+        "bytes": 2686962,
+        "day_sha256": "21f08ae40f9aa43f435863511f52e4ce2c4deafe6f7cb860fa89a84445fb502e"
+      },
+      "2026-09-08": {
+        "n_files": 172,
+        "bytes": 2665326,
+        "day_sha256": "823acddc80ad4d0f0574d1c424b06b2327c533f0ee7822402dc124d29721c2a2"
+      },
+      "2026-09-09": {
+        "n_files": 172,
+        "bytes": 2689717,
+        "day_sha256": "54d71024bcbfda2b5e8c1cc7cf112fdb6a7230499d0a9ac3a654a602d8c5fd81"
+      },
+      "2026-09-10": {
+        "n_files": 172,
+        "bytes": 2685775,
+        "day_sha256": "e4cd613d56901d1d956987c7a31e049b91b65c7860a3c26cb1a1016aca4432ce"
+      },
+      "2026-09-11": {
+        "n_files": 172,
+        "bytes": 2715360,
+        "day_sha256": "1c7b2a99f38e633777cf3f8b30be209eacf0f079098609eee8c0c7476f5f215e"
+      }
+    },
+    "excluded_day_note": "2026-06-26 is present in this raw fingerprint (its files are unchanged on disk) but is EXCLUDED downstream by scripts/exp033_build_panel.py per the preregistration (frozen/stale spot feed) -- exclusion is a code-level filter, not a data-deletion.",
+    "not_consumed_note": "data/external/ and data/candles/ were NOT read by the EXP033 pipeline (no temporal overlap with the option-chain collection window, per the Phase-1 data audit)."
+  },
+  "derived_artifacts": {
+    "data/derived/exp033_feature_panel.parquet": {
+      "present": true,
+      "sha256": "b84689f21c0694bf8e7ca6a8e1862c8f6b50cc49d3199eb7538f1a68605cc340",
+      "bytes": 8022989,
+      "n_rows": 9766,
+      "n_columns": 164
+    },
+    "data/derived/exp033_event_panel.parquet": {
+      "present": true,
+      "sha256": "fce4d929e0dc75eb522f2ab9eec697bbb8694ab1aa022e99ff4f1620a9cd41c6",
+      "bytes": 15671060,
+      "n_rows": 53719,
+      "n_columns": 172
+    },
+    "data/derived/exp033_combined_events.parquet": {
+      "present": true,
+      "sha256": "7453acceb926d614ddae670f226be627e089cf215e5e7fc36aa80b08015045d1",
+      "bytes": 2388311,
+      "n_rows": 6592,
+      "n_columns": 174
+    },
+    "data/derived/exp033_labeled_events.parquet": {
+      "present": true,
+      "sha256": "c7790d2ce1ada2dc2c1b6526cbc8d54660cc17c347499f2f69d536b5061e8cb2",
+      "bytes": 264969,
+      "n_rows": 18411,
+      "n_columns": 16
+    }
+  },
+  "outputs": {
+    "data_audit_report.csv": {
+      "path": "reports/exp033/data_audit_report.csv",
+      "present": true,
+      "sha256": "566d04dbec478a0e6452ac87849fc7daffaa48d8c9993224371e855bbce5a4c0",
+      "bytes": 16805,
+      "n_rows": 59
+    },
+    "data_audit_summary.md": {
+      "path": "reports/exp033/data_audit_summary.md",
+      "present": true,
+      "sha256": "5ac91e49b9140411ab54b4b1313f450b99ce2baa32972c89d7ec3d74d603f406",
+      "bytes": 4433
+    },
+    "event_detection_summary.md": {
+      "path": "reports/exp033/event_detection_summary.md",
+      "present": true,
+      "sha256": "bfeb871da9720fd37ef9a2729f38ecc6021716083ffd4164e7edff529e37b268",
+      "bytes": 801
+    },
+    "labeling_summary.md": {
+      "path": "reports/exp033/labeling_summary.md",
+      "present": true,
+      "sha256": "ba5b6ac0e1a1007eb961e5018b0cd396a97a55e155b8dd4425bfc69ebb03dc93",
+      "bytes": 2577
+    },
+    "walk_forward_predictions.csv": {
+      "path": "reports/exp033/walk_forward_predictions.csv",
+      "present": true,
+      "sha256": "438a1e0f094b8e36cf8947824f71fe66b25361ffa9ddd37427acecf09b0e88de",
+      "bytes": 4626813,
+      "n_rows": 14964
+    },
+    "walk_forward_trades.csv": {
+      "path": "reports/exp033/walk_forward_trades.csv",
+      "present": true,
+      "sha256": "e08a8e8ad04ae9b85f5dde770fa617c2713ef36e3a9142edcfd172560370c3f1",
+      "bytes": 153473,
+      "n_rows": 781
+    },
+    "probability_calibration_report.csv": {
+      "path": "reports/exp033/probability_calibration_report.csv",
+      "present": true,
+      "sha256": "6d9ee4b6ebd60bbb5cb52d6c527a2d1bd741f72bb9ee2fd9a4b889b7144b9465",
+      "bytes": 940,
+      "n_rows": 9
+    },
+    "feature_importance_report.csv": {
+      "path": "reports/exp033/feature_importance_report.csv",
+      "present": true,
+      "sha256": "6a6c6f868e280ebb44b99334aa1576640d699b7a7bde7e7b88fbfa41dc023145",
+      "bytes": 3177,
+      "n_rows": 84
+    },
+    "candidate_registry.csv": {
+      "path": "reports/exp033/candidate_registry.csv",
+      "present": true,
+      "sha256": "f4d292ebe3edcfcd29f4123b1df7f3af40cc84c7817f1b77a2b5840ecfeb4c2a",
+      "bytes": 6666,
+      "n_rows": 18
+    },
+    "final_exp033_report.md": {
+      "path": "reports/exp033/final_exp033_report.md",
+      "present": true,
+      "sha256": "9b4b3786cdc8ab2fde80355179733d2643cfcd17962e7e2662258ddbdc4d7437",
+      "bytes": 3853
+    },
+    "candidate_registry_inline": [
+      {
+        "candidate_id": "CONFIG_A__E6.1_CALL_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_A",
+        "number_of_events": 5,
+        "number_of_trades": 5,
+        "win_rate": 0.0,
+        "mean_return": -0.00060048,
+        "median_return": -0.0006579806,
+        "expected_value": -0.00060048,
+        "maximum_drawdown": -0.0023444193,
+        "max_loss": -0.0007765856,
+        "sharpe": -25.5818221562,
+        "hac_t_stat": -10.2500956164,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0007153024,
+        "confidence_interval_high": -0.0004856576,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.00050048,
+        "mean_return_x1.0": -0.00060048,
+        "mean_return_x1.5": -0.00070048,
+        "mean_return_x2.0": -0.00080048,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_A__E6.2_PUT_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_A",
+        "number_of_events": 2,
+        "number_of_trades": 2,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -9.551e-07,
+        "mean_return_x1.0": -0.0001009551,
+        "mean_return_x1.5": -0.0002009551,
+        "mean_return_x2.0": -0.0003009551,
+        "cost_fragile": false,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_A__E6.3_CALL_OI_UNWINDING_PREMIUM_RISE",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_A",
+        "number_of_events": 9,
+        "number_of_trades": 9,
+        "win_rate": 0.0,
+        "mean_return": -0.0005226112,
+        "median_return": -0.0006579806,
+        "expected_value": -0.0005226112,
+        "maximum_drawdown": -0.0040455204,
+        "max_loss": -0.0007765856,
+        "sharpe": -29.6787464042,
+        "hac_t_stat": -6.8827082603,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0006714361,
+        "confidence_interval_high": -0.0003737864,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0004226112,
+        "mean_return_x1.0": -0.0005226112,
+        "mean_return_x1.5": -0.0006226112,
+        "mean_return_x2.0": -0.0007226112,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_A__E6.4_PUT_OI_UNWINDING_PREMIUM_RISE",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_A",
+        "number_of_events": 1,
+        "number_of_trades": 1,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": 0.0001623246,
+        "mean_return_x1.0": 6.23246e-05,
+        "mean_return_x1.5": -3.76754e-05,
+        "mean_return_x2.0": -0.0001376754,
+        "cost_fragile": true,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_A__E6.5_PUT_OI_EXPANSION_PREMIUM_FALL",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_A",
+        "number_of_events": 6,
+        "number_of_trades": 6,
+        "win_rate": 0.0,
+        "mean_return": -0.0005226112,
+        "median_return": -0.0006579806,
+        "expected_value": -0.0005226112,
+        "maximum_drawdown": -0.0024776867,
+        "max_loss": -0.0007765856,
+        "sharpe": -29.6787464042,
+        "hac_t_stat": -5.477781305,
+        "hac_p_value": 0.9999999785,
+        "confidence_interval_low": -0.0007096063,
+        "confidence_interval_high": -0.0003356162,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0004226112,
+        "mean_return_x1.0": -0.0005226112,
+        "mean_return_x1.5": -0.0006226112,
+        "mean_return_x2.0": -0.0007226112,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_A__E6.6_CALL_OI_EXPANSION_PREMIUM_FALL",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_A",
+        "number_of_events": 3,
+        "number_of_trades": 3,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": 0.0001623246,
+        "mean_return_x1.0": 6.23246e-05,
+        "mean_return_x1.5": -3.76754e-05,
+        "mean_return_x2.0": -0.0001376754,
+        "cost_fragile": true,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_B__E6.1_CALL_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_B",
+        "number_of_events": 0,
+        "number_of_trades": 0,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": null,
+        "mean_return_x1.0": null,
+        "mean_return_x1.5": null,
+        "mean_return_x2.0": null,
+        "cost_fragile": false,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_B__E6.2_PUT_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_B",
+        "number_of_events": 0,
+        "number_of_trades": 0,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": null,
+        "mean_return_x1.0": null,
+        "mean_return_x1.5": null,
+        "mean_return_x2.0": null,
+        "cost_fragile": false,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_B__E6.3_CALL_OI_UNWINDING_PREMIUM_RISE",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_B",
+        "number_of_events": 0,
+        "number_of_trades": 0,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": null,
+        "mean_return_x1.0": null,
+        "mean_return_x1.5": null,
+        "mean_return_x2.0": null,
+        "cost_fragile": false,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_B__E6.4_PUT_OI_UNWINDING_PREMIUM_RISE",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_B",
+        "number_of_events": 0,
+        "number_of_trades": 0,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": null,
+        "mean_return_x1.0": null,
+        "mean_return_x1.5": null,
+        "mean_return_x2.0": null,
+        "cost_fragile": false,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_B__E6.5_PUT_OI_EXPANSION_PREMIUM_FALL",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_B",
+        "number_of_events": 0,
+        "number_of_trades": 0,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": null,
+        "mean_return_x1.0": null,
+        "mean_return_x1.5": null,
+        "mean_return_x2.0": null,
+        "cost_fragile": false,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_B__E6.6_CALL_OI_EXPANSION_PREMIUM_FALL",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_B",
+        "number_of_events": 0,
+        "number_of_trades": 0,
+        "win_rate": null,
+        "mean_return": null,
+        "median_return": null,
+        "expected_value": null,
+        "maximum_drawdown": null,
+        "max_loss": null,
+        "sharpe": null,
+        "hac_t_stat": null,
+        "hac_p_value": null,
+        "confidence_interval_low": null,
+        "confidence_interval_high": null,
+        "verdict": "INSUFFICIENT_DATA",
+        "status": "PRE_REGISTERED",
+        "q_bh": null,
+        "fdr_survives": null,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": null,
+        "mean_return_x1.0": null,
+        "mean_return_x1.5": null,
+        "mean_return_x2.0": null,
+        "cost_fragile": false,
+        "final_verdict": "INSUFFICIENT_DATA"
+      },
+      {
+        "candidate_id": "CONFIG_C__E6.1_CALL_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_C",
+        "number_of_events": 108,
+        "number_of_trades": 108,
+        "win_rate": 9.2592592593,
+        "mean_return": -0.0005280496,
+        "median_return": -0.0004279973,
+        "expected_value": -0.0005280496,
+        "maximum_drawdown": -0.0570326466,
+        "max_loss": -0.0012317169,
+        "sharpe": -21.8086790969,
+        "hac_t_stat": -8.9535146425,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0006436442,
+        "confidence_interval_high": -0.0004124551,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0004280496,
+        "mean_return_x1.0": -0.0005280496,
+        "mean_return_x1.5": -0.0006280496,
+        "mean_return_x2.0": -0.0007280496,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_C__E6.2_PUT_VOLUME_SPIKE_PREMIUM_MOMENTUM",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_C",
+        "number_of_events": 90,
+        "number_of_trades": 90,
+        "win_rate": 6.6666666667,
+        "mean_return": -0.0004030564,
+        "median_return": -0.0002125985,
+        "expected_value": -0.0004030564,
+        "maximum_drawdown": -0.0353174922,
+        "max_loss": -0.001160036,
+        "sharpe": -19.4348485022,
+        "hac_t_stat": -11.6681413189,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0004707613,
+        "confidence_interval_high": -0.0003353515,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0003030564,
+        "mean_return_x1.0": -0.0004030564,
+        "mean_return_x1.5": -0.0005030564,
+        "mean_return_x2.0": -0.0006030564,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_C__E6.3_CALL_OI_UNWINDING_PREMIUM_RISE",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_C",
+        "number_of_events": 165,
+        "number_of_trades": 165,
+        "win_rate": 6.6666666667,
+        "mean_return": -0.0004611567,
+        "median_return": -0.000259617,
+        "expected_value": -0.0004611567,
+        "maximum_drawdown": -0.0760941464,
+        "max_loss": -0.0012317169,
+        "sharpe": -20.7443481346,
+        "hac_t_stat": -14.5455661619,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0005232971,
+        "confidence_interval_high": -0.0003990163,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0003611567,
+        "mean_return_x1.0": -0.0004611567,
+        "mean_return_x1.5": -0.0005611567,
+        "mean_return_x2.0": -0.0006611567,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_C__E6.4_PUT_OI_UNWINDING_PREMIUM_RISE",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_C",
+        "number_of_events": 134,
+        "number_of_trades": 134,
+        "win_rate": 2.2388059701,
+        "mean_return": -0.0005041978,
+        "median_return": -0.0003227974,
+        "expected_value": -0.0005041978,
+        "maximum_drawdown": -0.0666108755,
+        "max_loss": -0.0012253667,
+        "sharpe": -23.2107895563,
+        "hac_t_stat": -13.9908769424,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0005748316,
+        "confidence_interval_high": -0.0004335641,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0004041978,
+        "mean_return_x1.0": -0.0005041978,
+        "mean_return_x1.5": -0.0006041978,
+        "mean_return_x2.0": -0.0007041978,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_C__E6.5_PUT_OI_EXPANSION_PREMIUM_FALL",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_C",
+        "number_of_events": 110,
+        "number_of_trades": 110,
+        "win_rate": 8.1818181818,
+        "mean_return": -0.0004800013,
+        "median_return": -0.0003422522,
+        "expected_value": -0.0004800013,
+        "maximum_drawdown": -0.0523599222,
+        "max_loss": -0.0012317169,
+        "sharpe": -23.9601901075,
+        "hac_t_stat": -11.3631798078,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0005627953,
+        "confidence_interval_high": -0.0003972074,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0003800013,
+        "mean_return_x1.0": -0.0004800013,
+        "mean_return_x1.5": -0.0005800013,
+        "mean_return_x2.0": -0.0006800013,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      },
+      {
+        "candidate_id": "CONFIG_C__E6.6_CALL_OI_EXPANSION_PREMIUM_FALL",
+        "experiment_id": "exp033",
+        "event_definition_version": "exp033-events-v1.0",
+        "feature_set_version": "MODEL_C",
+        "model_version": "lightgbm-v1.0-isotonic",
+        "target_stop_configuration": "CONFIG_C",
+        "number_of_events": 148,
+        "number_of_trades": 148,
+        "win_rate": 4.0540540541,
+        "mean_return": -0.0004741973,
+        "median_return": -0.0002625272,
+        "expected_value": -0.0004741973,
+        "maximum_drawdown": -0.0691612908,
+        "max_loss": -0.0012253667,
+        "sharpe": -28.3239587949,
+        "hac_t_stat": -15.3566246041,
+        "hac_p_value": 1.0,
+        "confidence_interval_low": -0.0005347201,
+        "confidence_interval_high": -0.0004136744,
+        "verdict": "REJECT",
+        "status": "REJECTED",
+        "q_bh": 1.0,
+        "fdr_survives": false,
+        "spa_p": null,
+        "reality_check_p": null,
+        "mean_return_x0.5": -0.0003741973,
+        "mean_return_x1.0": -0.0004741973,
+        "mean_return_x1.5": -0.0005741973,
+        "mean_return_x2.0": -0.0006741973,
+        "cost_fragile": false,
+        "final_verdict": "REJECT"
+      }
+    ]
+  },
+  "source_files_sha256": {
+    "_hash_method": "sha256 of content with CRLF/CR normalised to LF",
+    "docs/preregistrations/exp033_option_event_predictability.md": "3a5a8788f8741ab74652a76806cfc2e2f6871743b62f3c81586c4246e986ebe6",
+    "docs/preregistrations/exp033_event_definitions.json": "609d051aa117fd4cc89ae5e495225891a4909e6c6c3a77c4847e58e227ef7292",
+    "scripts/exp033_data_audit.py": "360cbf806d61e87b0666b5e69d1b78443ad13bbb7d25f519dec7a3daf45d51b5",
+    "scripts/exp033_build_panel.py": "d86fd1758814c59e38b8455c7ab2da27ab690f4ea5842c7d0d232fc0f1d06fe4",
+    "scripts/exp033_detect_events.py": "7bd413baff1385e6b674eadc069edd25c16cb1c025db9128f5f2d0d93b6f0184",
+    "scripts/exp033_label_events.py": "276a60f150cea243148f61b86c63860d8b44a6e0854f813b28fe62f0867253ec",
+    "scripts/exp033_walk_forward.py": "1850c7fc1fc387cb7440f49c8af18cbe8d21201241366ccc3b4269051c9ec50a",
+    "scripts/exp033_build_registry.py": "6c0ba14082797fbe52468ea8ff98b3a52893074589815a5c80a71aab53ec5d73",
+    "scripts/exp033_freeze.py": "ef32f42ce024110b4c5d59d9f10589b89525779f6711f504982d946902dd0352",
+    "nifty_quant/features/option_event_features.py": "bbe88b1528e09502782766474aa56fdb6a0992f40927aa8571d7ccb64dc1261a",
+    "nifty_quant/events/event_definitions.py": "b13e4e3a687d405b16553fc8192a01ea8fcb4b4470e741c4f946666c2266a905",
+    "nifty_quant/events/event_detector.py": "2ec8d1dbc3b679155709d4bec87b5e1b4d9c45d5d4e7e4408a229e04ed3851ed",
+    "nifty_quant/labels/triple_barrier.py": "be9ee1fe643745c2561df2795e0d3d8230429201a35e83dcaa99e32671f9f0e2",
+    "nifty_quant/models/option_event_model.py": "1cc27c23a5bd16cd088b54c4484ef8e0c6535ea41fbda62686dc0d6f397b603f",
+    "nifty_quant/models/probability_calibration.py": "a6b658aae790de324b235af05f2e521660cbe99c891d69c5e4912e97d88dfd85",
+    "nifty_quant/registry/candidate_registry.py": "21414f333b57244c8a82bd2aa11b0006724fead44dbd6a83c998188e707b98f3",
+    "requirements.txt": "6b393cf0e2d4b2dd558e7e573d5568ad202635108aa0144ff280ae3a44256032",
+    "scripts/strategy_test_framework.py": "4c32575ca55843fec7bdaa9efe0242a97c5294e344f3e9f8eff1c0a7b6ca8b7b",
+    "nifty_quant/analytics/data_snooping.py": "139aea4dbedb573f31245de125d21096b972144def1f8d708912ad39c7346f00",
+    "nifty_quant/analytics/black_scholes.py": "de108c4f90186cafbf082cf37429dbaf4aa7557bfbe1e5c17633e893f1299a06",
+    "nifty_quant/research/derive_iv.py": "f54061d7caa798c87e65dfb1fbe87b92f4b7883625826605fa9107e32ac4e6a0",
+    "nifty_quant/research/walkforward.py": "d8f44af9141e071793c909886c2370d95f254aaed1e42b01189081dbdc0539b8"
+  }
+}
